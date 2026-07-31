@@ -13,29 +13,70 @@ st.set_page_config(page_title="Screen Printing R&D Portal", layout="wide", page_
 
 EXCEL_FILE = "Screen_Printing_RND_Technical_Library_Workbook.xlsx"
 
-# Standard Chemical/Ink Library
-INK_LIBRARY = {
-    "Silicone Base Clear": {"code": "SIL-BASE-90", "role": "Base Transparent", "notes": "High elasticity silicone base"},
-    "Silicone White Undercoat": {"code": "SIL-WHT-10", "role": "Base Opaque / White", "notes": "Provides opacity & bleed barrier"},
-    "High Fastness Black Pigment": {"code": "PIG-BLK-05", "role": "Pigment Colorant", "notes": "Color shade matching"},
-    "High Fastness Red Pigment": {"code": "PIG-RED-02", "role": "Pigment Colorant", "notes": "Vibrant red shade matching"},
-    "Silicone Platinum Catalyst": {"code": "CAT-SIL-02", "role": "Catalyst / Hardener", "notes": "Mix thoroughly before printing"},
-    "Anti-Fading Crosslinker": {"code": "XL-MOD-01", "role": "Crosslinker / Fixer", "notes": "Enhances wash fastness (20+ cycles)"},
-    "Water-Based Elastic Clear Base": {"code": "WB-BASE-01", "role": "Base Transparent", "notes": "Eco-friendly soft hand base"},
-    "Plastisol High-Opacity White": {"code": "PL-WHT-99", "role": "Base Opaque / White", "notes": "Heavy coverage underbase"}
-}
+# Initial Chemical/Ink Library Data
+INITIAL_INK_LIBRARY = [
+    {"Product Name": "Silicone Base Clear", "Supplier Code": "SIL-BASE-90", "Role": "Base Transparent", "Notes": "High elasticity silicone base"},
+    {"Product Name": "Silicone White Undercoat", "Supplier Code": "SIL-WHT-10", "Role": "Base Opaque / White", "Notes": "Provides opacity & bleed barrier"},
+    {"Product Name": "High Fastness Black Pigment", "Supplier Code": "PIG-BLK-05", "Role": "Pigment Colorant", "Notes": "Color shade matching"},
+    {"Product Name": "High Fastness Red Pigment", "Supplier Code": "PIG-RED-02", "Role": "Pigment Colorant", "Notes": "Vibrant red shade matching"},
+    {"Product Name": "Silicone Platinum Catalyst", "Supplier Code": "CAT-SIL-02", "Role": "Catalyst / Hardener", "Notes": "Mix thoroughly before printing"},
+    {"Product Name": "Anti-Fading Crosslinker", "Supplier Code": "XL-MOD-01", "Role": "Crosslinker / Fixer", "Notes": "Enhances wash fastness (20+ cycles)"},
+    {"Product Name": "Water-Based Elastic Clear Base", "Supplier Code": "WB-BASE-01", "Role": "Base Transparent", "Notes": "Eco-friendly soft hand base"},
+    {"Product Name": "Plastisol High-Opacity White", "Supplier Code": "PL-WHT-99", "Role": "Base Opaque / White", "Notes": "Heavy coverage underbase"}
+]
 
+# Initialize Session State
+if "ink_library" not in st.session_state:
+    st.session_state.ink_library = pd.DataFrame(INITIAL_INK_LIBRARY)
+
+if "formulation_df" not in st.session_state:
+    st.session_state.formulation_df = pd.DataFrame([
+        {"Delete": False, "Role": "Base Transparent", "Product Name": "Silicone Base Clear", "Code": "SIL-BASE-90", "Percentage (%)": 70.0, "Mixing Notes": "High elasticity base"},
+        {"Delete": False, "Role": "Base Opaque / White", "Product Name": "Silicone White Undercoat", "Code": "SIL-WHT-10", "Percentage (%)": 20.0, "Mixing Notes": "Provides opacity & bleed barrier"},
+        {"Delete": False, "Role": "Pigment Colorant", "Product Name": "High Fastness Black Pigment", "Code": "PIG-BLK-05", "Percentage (%)": 5.0, "Mixing Notes": "Color shade matching"},
+        {"Delete": False, "Role": "Catalyst / Hardener", "Product Name": "Silicone Platinum Catalyst", "Code": "CAT-SIL-02", "Percentage (%)": 2.0, "Mixing Notes": "Mix thoroughly before printing"},
+        {"Delete": False, "Role": "Crosslinker / Fixer", "Product Name": "Anti-Fading Crosslinker", "Code": "XL-MOD-01", "Percentage (%)": 3.0, "Mixing Notes": "Enhances wash fastness (20+ cycles)"}
+    ])
+
+# Helper Function: Load Data
 def load_data():
     if not os.path.exists(EXCEL_FILE):
         return pd.DataFrame(), pd.DataFrame()
     try:
         xls = pd.ExcelFile(EXCEL_FILE)
-        trials_df = pd.read_excel(xls, "R&D Master Trial Log", skiprows=2)
-        matrix_df = pd.read_excel(xls, "Fabric Compatibility Matrix", skiprows=2)
+        trials_df = pd.read_excel(xls, "R&D Master Trial Log", skiprows=2) if "R&D Master Trial Log" in xls.sheet_names else pd.DataFrame()
+        matrix_df = pd.read_excel(xls, "Fabric Compatibility Matrix", skiprows=2) if "Fabric Compatibility Matrix" in xls.sheet_names else pd.DataFrame()
         return trials_df, matrix_df
     except Exception as e:
         st.error(f"Error loading workbook: {e}")
         return pd.DataFrame(), pd.DataFrame()
+
+# Helper Function: Save Trial to Excel
+def save_trial_to_excel(trial_data):
+    try:
+        if not os.path.exists(EXCEL_FILE):
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "R&D Master Trial Log"
+            ws.append([])
+            ws.append([])
+            ws.append(["Trial ID", "Date", "Style / Reference", "Technique", "Fabric Type", "Objective", "Recipe Variation", "Wash Result", "Crocking Result", "Status"])
+        else:
+            wb = openpyxl.load_workbook(EXCEL_FILE)
+            if "R&D Master Trial Log" in wb.sheetnames:
+                ws = wb["R&D Master Trial Log"]
+            else:
+                ws = wb.create_sheet("R&D Master Trial Log")
+                ws.append([])
+                ws.append([])
+                ws.append(["Trial ID", "Date", "Style / Reference", "Technique", "Fabric Type", "Objective", "Recipe Variation", "Wash Result", "Crocking Result", "Status"])
+        
+        ws.append(list(trial_data.values()))
+        wb.save(EXCEL_FILE)
+        return True
+    except Exception as e:
+        st.error(f"Failed to save to Excel file: {e}")
+        return False
 
 trials_df, matrix_df = load_data()
 
@@ -57,9 +98,9 @@ def generate_pdf_report(data):
         'SecTitle', parent=styles['Heading2'], fontName='Helvetica-Bold', fontSize=11, leading=14,
         textColor=colors.HexColor('#2563EB'), spaceBefore=8, spaceAfter=4
     )
-    p_style = styles['Normal']
-    p_style.fontSize = 8.5
-    p_style.leading = 11
+    p_style = ParagraphStyle(
+        'BodyCustom', parent=styles['Normal'], fontName='Helvetica', fontSize=8.5, leading=11
+    )
 
     elements = []
     
@@ -103,12 +144,12 @@ def generate_pdf_report(data):
     
     for row in data['formulation']:
         i_table.append([
-            Paragraph(str(row['Role']), p_style),
-            Paragraph(str(row['Product Name']), p_style),
-            Paragraph(str(row['Code']), p_style),
-            Paragraph(f"{row['Percentage (%)']:.1f}%", p_style),
-            Paragraph(f"{row['Weight (g)']:.1f}g", p_style),
-            Paragraph(str(row['Mixing Notes']), p_style),
+            Paragraph(str(row.get('Role', '')), p_style),
+            Paragraph(str(row.get('Product Name', '')), p_style),
+            Paragraph(str(row.get('Code', '')), p_style),
+            Paragraph(f"{float(row.get('Percentage (%)', 0)):.1f}%", p_style),
+            Paragraph(f"{float(row.get('Weight (g)', 0)):.1f}g", p_style),
+            Paragraph(str(row.get('Mixing Notes', '')), p_style),
         ])
     t_i = Table(i_table, colWidths=[90, 130, 60, 50, 55, 145])
     t_i.setStyle(TableStyle([
@@ -184,47 +225,66 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
         gsm = st.text_input("GSM", value="220 GSM")
         undercoat = st.text_input("Undercoat Required", value="Yes (Anti-Bleed Barrier)")
 
-    st.markdown("---")
+    st.divider()
     st.header("2. Ink Formulation & Chemical Recipe")
     batch_size = st.number_input("Target Batch Size (Grams)", value=1000, step=100)
     
-    if "formulation_rows" not in st.session_state:
-        st.session_state.formulation_rows = [
-            {"Role": "Base Transparent", "Product Name": "Silicone Base Clear", "Code": "SIL-BASE-90", "Percentage (%)": 70.0, "Mixing Notes": "High elasticity base"},
-            {"Role": "Base Opaque / White", "Product Name": "Silicone White Undercoat", "Code": "SIL-WHT-10", "Percentage (%)": 20.0, "Mixing Notes": "Provides opacity & bleed barrier"},
-            {"Role": "Pigment Colorant", "Product Name": "High Fastness Black Pigment", "Code": "PIG-BLK-05", "Percentage (%)": 5.0, "Mixing Notes": "Color shade matching"},
-            {"Role": "Catalyst / Hardener", "Product Name": "Silicone Platinum Catalyst", "Code": "CAT-SIL-02", "Percentage (%)": 2.0, "Mixing Notes": "Mix thoroughly before printing"},
-            {"Role": "Crosslinker / Fixer", "Product Name": "Anti-Fading Crosslinker", "Code": "XL-MOD-01", "Percentage (%)": 3.0, "Mixing Notes": "Enhances wash fastness (20+ cycles)"}
-        ]
+    st.caption("💡 **To Add Rows:** Click `+ Add row` at the bottom of the table. **To Delete Rows:** Check the `Delete` box and click **'🗑️ Delete Selected Rows'** below.")
 
-    updated_formulation = []
-    for idx, row in enumerate(st.session_state.formulation_rows):
-        c1, c2, c3, c4, c5 = st.columns([2, 3, 2, 2, 3])
-        with c1:
-            role = st.text_input(f"Role #{idx+1}", value=row["Role"], key=f"role_{idx}")
-        with c2:
-            p_name = st.text_input(f"Product Name #{idx+1}", value=row["Product Name"], key=f"pname_{idx}")
-        with c3:
-            code = st.text_input(f"Code #{idx+1}", value=row["Code"], key=f"code_{idx}")
-        with c4:
-            pct = st.number_input(f"Ratio (%) #{idx+1}", value=float(row["Percentage (%)"]), key=f"pct_{idx}", step=0.5)
-        with c5:
-            notes = st.text_input(f"Mixing Notes #{idx+1}", value=row["Mixing Notes"], key=f"notes_{idx}")
-            
-        weight = (pct / 100.0) * batch_size
-        updated_formulation.append({
-            "Role": role, "Product Name": p_name, "Code": code, 
-            "Percentage (%)": pct, "Weight (g)": weight, "Mixing Notes": notes
-        })
+    # Interactive Spreadsheet Table
+    edited_df = st.data_editor(
+        st.session_state.formulation_df,
+        num_rows="dynamic",
+        column_config={
+            "Delete": st.column_config.CheckboxColumn("Delete?", default=False),
+            "Role": st.column_config.SelectboxColumn(
+                "Component Role",
+                options=[
+                    "Base Transparent",
+                    "Base Opaque / White",
+                    "Pigment Colorant",
+                    "Catalyst / Hardener",
+                    "Crosslinker / Fixer",
+                    "Additive / Retarder",
+                    "Thinner / Reducer",
+                    "Thickeners",
+                    "Other"
+                ],
+                required=True
+            ),
+            "Product Name": st.column_config.TextColumn("Product Name", required=True),
+            "Code": st.column_config.TextColumn("Code"),
+            "Percentage (%)": st.column_config.NumberColumn("Ratio (%)", min_value=0.0, max_value=100.0, step=0.5, format="%.1f%%"),
+            "Mixing Notes": st.column_config.TextColumn("Mixing Notes")
+        },
+        use_container_width=True,
+        key="formulation_editor"
+    )
 
-    form_df = pd.DataFrame(updated_formulation)
-    st.table(form_df)
+    # Save current edit state
+    st.session_state.formulation_df = edited_df
+
+    # Explicit Delete Button Action
+    if st.button("🗑️ Delete Selected Rows"):
+        if "Delete" in edited_df.columns:
+            # Filter out checked rows
+            filtered_df = edited_df[edited_df["Delete"] == False].reset_index(drop=True)
+            st.session_state.formulation_df = filtered_df
+            st.rerun()
+
+    # Calculate Weights dynamically based on batch_size
+    calc_df = st.session_state.formulation_df.copy()
+    calc_df["Percentage (%)"] = pd.to_numeric(calc_df["Percentage (%)"], errors="coerce").fillna(0.0)
+    calc_df["Weight (g)"] = (calc_df["Percentage (%)"] / 100.0) * batch_size
     
-    total_pct = form_df["Percentage (%)"].sum()
-    total_weight = form_df["Weight (g)"].sum()
-    st.info(f"**Total Formulation Ratio:** {total_pct:.1f}% | **Total Weight:** {total_weight:.1f} g")
+    total_pct = calc_df["Percentage (%)"].sum()
+    total_weight = calc_df["Weight (g)"].sum()
+    
+    m_col1, m_col2 = st.columns(2)
+    m_col1.metric("Total Ratio (%)", f"{total_pct:.1f}%")
+    m_col2.metric("Total Weight (g)", f"{total_weight:.1f} g")
 
-    st.markdown("---")
+    st.divider()
     st.header("3. Technical Printing & Machine Setup Parameters")
     m_col1, m_col2 = st.columns(2)
     with m_col1:
@@ -238,7 +298,7 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
         belt_speed = st.text_input("Drying Belt Speed / Time", value="90sec")
         passes = st.text_input("Number of Passes / Strokes", value="2 Print - 1 Flash - 2 Print")
 
-    st.markdown("---")
+    st.divider()
     st.header("4. Sign-off Status")
     s_col1, s_col2 = st.columns(2)
     with s_col1:
@@ -248,14 +308,14 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
         sig_qa = st.selectbox("Quality Dept Approval", ["Pending", "Approved", "Rejected"], index=1)
         sig_prod = st.selectbox("Production Manager Approval", ["Pending", "Approved", "Rejected"], index=1)
 
-    st.markdown("---")
+    st.divider()
     
     recipe_summary = {
         'recipe_id': recipe_id, 'date': str(rec_date), 'style_name': style_name,
         'print_tech': print_tech, 'developer': developer, 'revision': revision,
         'fabric_comp': fabric_comp, 'fabric_color': fabric_color, 'fabric_const': fabric_const,
         'gsm': gsm, 'dye_risk': dye_migration, 'undercoat': undercoat,
-        'batch_size': batch_size, 'formulation': updated_formulation,
+        'batch_size': batch_size, 'formulation': calc_df.to_dict(orient="records"),
         'mesh': mesh, 'squeegee_duro': squeegee_duro, 'squeegee_angle': squeegee_angle,
         'off_contact': off_contact, 'flash_cure': flash_cure, 'main_cure': main_cure,
         'belt_speed': belt_speed, 'passes': passes, 'sig_rd': sig_rd, 'sig_qa': sig_qa,
@@ -274,11 +334,23 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
 
 elif menu == "📚 Chemical & Ink Library Manager":
     st.header("📚 Chemical & Advanced Ink Library")
-    lib_df = pd.DataFrame([
-        {"Product Name": k, "Supplier Code": v["code"], "Role": v["role"], "Notes": v["notes"]}
-        for k, v in INK_LIBRARY.items()
-    ])
-    st.dataframe(lib_df, use_container_width=True)
+    
+    with st.expander("➕ Add New Chemical Product to Library"):
+        with st.form("add_chem_form"):
+            new_pname = st.text_input("Product Name")
+            new_code = st.text_input("Supplier / Product Code")
+            new_role = st.selectbox("Component Role", ["Base Transparent", "Base Opaque / White", "Pigment Colorant", "Catalyst / Hardener", "Crosslinker / Fixer", "Additive / Retarder", "Thinner / Reducer"])
+            new_notes = st.text_area("Notes & Properties")
+            
+            if st.form_submit_button("Add to Library"):
+                if new_pname and new_code:
+                    new_item = pd.DataFrame([{"Product Name": new_pname, "Supplier Code": new_code, "Role": new_role, "Notes": new_notes}])
+                    st.session_state.ink_library = pd.concat([st.session_state.ink_library, new_item], ignore_index=True)
+                    st.success(f"Added '{new_pname}' to chemical library!")
+                else:
+                    st.warning("Please provide both Product Name and Code.")
+
+    st.dataframe(st.session_state.ink_library, use_container_width=True)
 
 elif menu == "🧪 Log R&D Trial Result":
     st.header("Log Experimental & Durability Trial Result")
@@ -298,12 +370,33 @@ elif menu == "🧪 Log R&D Trial Result":
             status = st.selectbox("Overall Status", ["APPROVED", "REJECTED", "PENDING"])
         
         if st.form_submit_button("Save Trial Log"):
-            st.success(f"Trial {trial_id} logged successfully!")
+            trial_data = {
+                "Trial ID": trial_id,
+                "Date": str(trial_date),
+                "Style / Reference": style_ref,
+                "Technique": technique,
+                "Fabric Type": fabric_type,
+                "Objective": objective,
+                "Recipe Variation": recipe_var,
+                "Wash Result": wash_res,
+                "Crocking Result": crocking_res,
+                "Status": status
+            }
+            if save_trial_to_excel(trial_data):
+                st.success(f"Trial {trial_id} logged and saved to Excel successfully!")
 
 elif menu == "📊 View Master Trial Log":
     st.header("R&D Master Experimental & Durability Trial Log")
-    st.dataframe(trials_df, use_container_width=True)
+    fresh_trials, _ = load_data()
+    if not fresh_trials.empty:
+        st.dataframe(fresh_trials, use_container_width=True)
+    else:
+        st.info("No trial records found in the Excel workbook yet.")
 
 elif menu == "🧩 Fabric Compatibility Matrix":
     st.header("Print Technique vs. Fabric Substrate Compatibility Matrix")
-    st.dataframe(matrix_df, use_container_width=True)
+    _, fresh_matrix = load_data()
+    if not fresh_matrix.empty:
+        st.dataframe(fresh_matrix, use_container_width=True)
+    else:
+        st.info("No compatibility matrix sheet found in the Excel workbook.") 
