@@ -139,7 +139,7 @@ def generate_pdf_report(data):
     
     # 3. Ink Formulation
     elements.append(Paragraph(f"2. INK FORMULATION & CHEMICAL RECIPE (Target Batch: {data['batch_size']} g)", sec_style))
-    ink_headers = ["Component Role", "Chemical / Ink Product Name", "Code", "Ratio (%)", "Weight (g)", "Mixing Notes"]
+    ink_headers = ["Component Role", "Chemical / Ink Product Name", "Code", "Ratio (%)", "Use Qty (g)", "Mixing Notes"]
     i_table = [[Paragraph(f"<b>{h}</b>", ParagraphStyle('TH', parent=p_style, textColor=colors.white)) for h in ink_headers]]
     
     for row in data['formulation']:
@@ -148,7 +148,7 @@ def generate_pdf_report(data):
             Paragraph(str(row.get('Product Name', '')), p_style),
             Paragraph(str(row.get('Code', '')), p_style),
             Paragraph(f"{float(row.get('Percentage (%)', 0)):.1f}%", p_style),
-            Paragraph(f"{float(row.get('Weight (g)', 0)):.1f}g", p_style),
+            Paragraph(f"{float(row.get('Use Quantity (g)', 0)):.1f}g", p_style),
             Paragraph(str(row.get('Mixing Notes', '')), p_style),
         ])
     t_i = Table(i_table, colWidths=[90, 130, 60, 50, 55, 145])
@@ -210,30 +210,39 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
     
     col1, col2 = st.columns(2)
     with col1:
-        recipe_id = st.text_input("Recipe ID", value="RND-REC-2026-001")
-        style_name = st.text_input("Style Name / No", value="ST-2026-GYMSHARK-01")
-        developer = st.text_input("Developer / Exec", value="Durability Lab Exec")
-        fabric_comp = st.text_input("Fabric Composition", value="95% Cotton / 5% Elastane")
-        fabric_const = st.text_input("Fabric Construction", value="Single Jersey (Knitted)")
+        recipe_id = st.text_input("Recipe ID", value="RND-REC-2026-001", placeholder="e.g. RND-REC-2026-001")
+        style_name = st.text_input("Style Name / No", value="ST-2026-GYMSHARK-01", placeholder="e.g. ST-2026-GYMSHARK-01")
+        developer = st.text_input("Developer / Exec", value="Durability Lab Exec", placeholder="e.g. John Doe / Lab Exec")
+        fabric_comp = st.text_input("Fabric Composition", value="95% Cotton / 5% Elastane", placeholder="e.g. 95% Cotton / 5% Elastane")
+        fabric_const = st.text_input("Fabric Construction", value="Single Jersey (Knitted)", placeholder="e.g. Single Jersey (Knitted)")
         dye_migration = st.selectbox("Dye Migration Risk", ["Low", "Medium", "High", "Critical"], index=1)
     
     with col2:
         rec_date = st.date_input("Date", value=datetime(2026, 8, 1))
-        print_tech = st.text_input("Print Technique", value="Silicone Rubber")
-        revision = st.text_input("Revision No", value="v2.1")
-        fabric_color = st.text_input("Fabric Color / CW", value="Charcoal Dark Grey")
-        gsm = st.text_input("GSM", value="220 GSM")
-        undercoat = st.text_input("Undercoat Required", value="Yes (Anti-Bleed Barrier)")
+        print_tech = st.text_input("Print Technique", value="Silicone Rubber", placeholder="e.g. Silicone Rubber, High Density")
+        revision = st.text_input("Revision No", value="v2.1", placeholder="e.g. v1.0, v2.1")
+        fabric_color = st.text_input("Fabric Color / CW", value="Charcoal Dark Grey", placeholder="e.g. Charcoal Dark Grey")
+        gsm = st.text_input("GSM", value="220 GSM", placeholder="e.g. 180 GSM, 220 GSM")
+        undercoat = st.text_input("Undercoat Required", value="Yes (Anti-Bleed Barrier)", placeholder="e.g. Yes (Anti-Bleed Barrier)")
 
     st.divider()
     st.header("2. Ink Formulation & Chemical Recipe")
-    batch_size = st.number_input("Target Batch Size (Grams)", value=1000, step=100)
+    
+    batch_size = st.number_input("Target Batch Size (Grams)", value=1000.0, step=100.0, min_value=0.0)
     
     st.caption("💡 **To Add Rows:** Click `+ Add row` at the bottom of the table. **To Delete Rows:** Check the `Delete` box and click **'🗑️ Delete Selected Rows'** below.")
 
+    # Calculate Use Quantity (g) dynamically based on Ratio (%) and Target Batch Size
+    st.session_state.formulation_df["Percentage (%)"] = pd.to_numeric(st.session_state.formulation_df["Percentage (%)"], errors="coerce").fillna(0.0)
+    st.session_state.formulation_df["Use Quantity (g)"] = (st.session_state.formulation_df["Percentage (%)"] / 100.0) * batch_size
+
+    # Order dataframe columns explicitly so Use Quantity (g) appears directly after Ratio (%)
+    column_order = ["Delete", "Role", "Product Name", "Code", "Percentage (%)", "Use Quantity (g)", "Mixing Notes"]
+    display_df = st.session_state.formulation_df.reindex(columns=column_order)
+
     # Interactive Spreadsheet Table
     edited_df = st.data_editor(
-        st.session_state.formulation_df,
+        display_df,
         num_rows="dynamic",
         column_config={
             "Delete": st.column_config.CheckboxColumn("Delete?", default=False),
@@ -252,51 +261,70 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
                 ],
                 required=True
             ),
-            "Product Name": st.column_config.TextColumn("Product Name", required=True),
-            "Code": st.column_config.TextColumn("Code"),
-            "Percentage (%)": st.column_config.NumberColumn("Ratio (%)", min_value=0.0, max_value=100.0, step=0.5, format="%.1f%%"),
-            "Mixing Notes": st.column_config.TextColumn("Mixing Notes")
+            "Product Name": st.column_config.TextColumn(
+                "Product Name", 
+                required=True, 
+                help="e.g. Silicone Base Clear"
+            ),
+            "Code": st.column_config.TextColumn(
+                "Code", 
+                help="e.g. SIL-BASE-90"
+            ),
+            "Percentage (%)": st.column_config.NumberColumn(
+                "Ratio (%)", 
+                min_value=0.0, 
+                max_value=100.0, 
+                step=0.5, 
+                format="%.1f%%"
+            ),
+            "Use Quantity (g)": st.column_config.NumberColumn(
+                "Use Quantity (g)", 
+                disabled=True,
+                format="%.1f g"
+            ),
+            "Mixing Notes": st.column_config.TextColumn(
+                "Mixing Notes", 
+                help="e.g. Mix thoroughly before printing"
+            )
         },
         use_container_width=True,
         key="formulation_editor"
     )
 
-    # Save current edit state
+    # Save current edit state back to session state
     st.session_state.formulation_df = edited_df
 
     # Explicit Delete Button Action
     if st.button("🗑️ Delete Selected Rows"):
         if "Delete" in edited_df.columns:
-            # Filter out checked rows
             filtered_df = edited_df[edited_df["Delete"] == False].reset_index(drop=True)
             st.session_state.formulation_df = filtered_df
             st.rerun()
 
-    # Calculate Weights dynamically based on batch_size
     calc_df = st.session_state.formulation_df.copy()
     calc_df["Percentage (%)"] = pd.to_numeric(calc_df["Percentage (%)"], errors="coerce").fillna(0.0)
-    calc_df["Weight (g)"] = (calc_df["Percentage (%)"] / 100.0) * batch_size
+    calc_df["Use Quantity (g)"] = (calc_df["Percentage (%)"] / 100.0) * batch_size
     
     total_pct = calc_df["Percentage (%)"].sum()
-    total_weight = calc_df["Weight (g)"].sum()
+    total_weight = calc_df["Use Quantity (g)"].sum()
     
     m_col1, m_col2 = st.columns(2)
     m_col1.metric("Total Ratio (%)", f"{total_pct:.1f}%")
-    m_col2.metric("Total Weight (g)", f"{total_weight:.1f} g")
+    m_col2.metric("Total Use Quantity (g)", f"{total_weight:.1f} g")
 
     st.divider()
     st.header("3. Technical Printing & Machine Setup Parameters")
     m_col1, m_col2 = st.columns(2)
     with m_col1:
-        mesh = st.text_input("Mesh Count (T/Inch)", value="120T (305 Mesh)")
-        squeegee_duro = st.text_input("Squeegee Durometer", value="70/90/70 Triple")
-        squeegee_angle = st.text_input("Squeegee Angle / Speed", value="75° / Medium Speed")
-        off_contact = st.text_input("Off-Contact Distance", value="2.5 mm")
+        mesh = st.text_input("Mesh Count (T/Inch)", value="120T (305 Mesh)", placeholder="e.g. 120T (305 Mesh)")
+        squeegee_duro = st.text_input("Squeegee Durometer", value="70/90/70 Triple", placeholder="e.g. 70/90/70 Triple")
+        squeegee_angle = st.text_input("Squeegee Angle / Speed", value="75° / Medium Speed", placeholder="e.g. 75° / Medium Speed")
+        off_contact = st.text_input("Off-Contact Distance", value="2.5 mm", placeholder="e.g. 2.5 mm")
     with m_col2:
-        flash_cure = st.text_input("Flash Cure Temp / Time", value="110°C / 5 Seconds")
-        main_cure = st.text_input("Main Curing Temp", value="100°C")
-        belt_speed = st.text_input("Drying Belt Speed / Time", value="90sec")
-        passes = st.text_input("Number of Passes / Strokes", value="2 Print - 1 Flash - 2 Print")
+        flash_cure = st.text_input("Flash Cure Temp / Time", value="110°C / 5 Seconds", placeholder="e.g. 110°C / 5 Seconds")
+        main_cure = st.text_input("Main Curing Temp", value="100°C", placeholder="e.g. 100°C")
+        belt_speed = st.text_input("Drying Belt Speed / Time", value="90sec", placeholder="e.g. 90sec")
+        passes = st.text_input("Number of Passes / Strokes", value="2 Print - 1 Flash - 2 Print", placeholder="e.g. 2 Print - 1 Flash - 2 Print")
 
     st.divider()
     st.header("4. Sign-off Status")
@@ -337,10 +365,10 @@ elif menu == "📚 Chemical & Ink Library Manager":
     
     with st.expander("➕ Add New Chemical Product to Library"):
         with st.form("add_chem_form"):
-            new_pname = st.text_input("Product Name")
-            new_code = st.text_input("Supplier / Product Code")
+            new_pname = st.text_input("Product Name", placeholder="e.g. Silicone Base Clear")
+            new_code = st.text_input("Supplier / Product Code", placeholder="e.g. SIL-BASE-90")
             new_role = st.selectbox("Component Role", ["Base Transparent", "Base Opaque / White", "Pigment Colorant", "Catalyst / Hardener", "Crosslinker / Fixer", "Additive / Retarder", "Thinner / Reducer"])
-            new_notes = st.text_area("Notes & Properties")
+            new_notes = st.text_area("Notes & Properties", placeholder="e.g. High elasticity silicone base")
             
             if st.form_submit_button("Add to Library"):
                 if new_pname and new_code:
@@ -357,16 +385,16 @@ elif menu == "🧪 Log R&D Trial Result":
     with st.form("log_trial_form"):
         col1, col2 = st.columns(2)
         with col1:
-            trial_id = st.text_input("Trial ID", value="TR-2026-006")
-            style_ref = st.text_input("Style / Reference", value="ST-2026-GYM-01")
-            fabric_type = st.text_input("Fabric Type", value="95% Ctn / 5% Elastane")
-            recipe_var = st.text_area("Recipe / Parameter Variation", value="Added 3% Crosslinker XL-MOD-01")
-            crocking_res = st.text_input("Crocking Result", value="Grade 4.5")
+            trial_id = st.text_input("Trial ID", value="TR-2026-006", placeholder="e.g. TR-2026-006")
+            style_ref = st.text_input("Style / Reference", value="ST-2026-GYM-01", placeholder="e.g. ST-2026-GYM-01")
+            fabric_type = st.text_input("Fabric Type", value="95% Ctn / 5% Elastane", placeholder="e.g. 95% Ctn / 5% Elastane")
+            recipe_var = st.text_area("Recipe / Parameter Variation", value="Added 3% Crosslinker XL-MOD-01", placeholder="e.g. Added 3% Crosslinker XL-MOD-01")
+            crocking_res = st.text_input("Crocking Result", value="Grade 4.5", placeholder="e.g. Grade 4.5")
         with col2:
             trial_date = st.date_input("Date", value=datetime(2026, 8, 1))
             technique = st.selectbox("Technique", ["Silicone", "Rubber Print", "High Density", "Flock Print", "Glitter Print"])
-            objective = st.text_area("Trial Objective", value="Improve wash fastness past 20 cycles")
-            wash_res = st.text_input("Wash Result (20 Cycles)", value="Grade 4.5 (Pass)")
+            objective = st.text_area("Trial Objective", value="Improve wash fastness past 20 cycles", placeholder="e.g. Improve wash fastness past 20 cycles")
+            wash_res = st.text_input("Wash Result (20 Cycles)", value="Grade 4.5 (Pass)", placeholder="e.g. Grade 4.5 (Pass)")
             status = st.selectbox("Overall Status", ["APPROVED", "REJECTED", "PENDING"])
         
         if st.form_submit_button("Save Trial Log"):
@@ -399,4 +427,4 @@ elif menu == "🧩 Fabric Compatibility Matrix":
     if not fresh_matrix.empty:
         st.dataframe(fresh_matrix, use_container_width=True)
     else:
-        st.info("No compatibility matrix sheet found in the Excel workbook.") 
+        st.info("No compatibility matrix sheet found in the Excel workbook.")
