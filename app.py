@@ -12,8 +12,9 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 st.set_page_config(page_title="Screen Printing R&D Portal", layout="wide", page_icon="🎨")
 
 EXCEL_FILE = "Screen_Printing_RND_Technical_Library_Workbook.xlsx"
+INK_LIBRARY_SHEET = "Chemical Ink Library"
 
-# Initial Chemical/Ink Library Data
+# Initial Default Data (used only if Excel sheet doesn't exist yet)
 INITIAL_INK_LIBRARY = [
     {"Product Name": "Silicone Base Clear", "Supplier Code": "SIL-BASE-90", "Role": "Base Transparent", "Notes": "High elasticity silicone base"},
     {"Product Name": "Silicone White Undercoat", "Supplier Code": "SIL-WHT-10", "Role": "Base Opaque / White", "Notes": "Provides opacity & bleed barrier"},
@@ -25,9 +26,40 @@ INITIAL_INK_LIBRARY = [
     {"Product Name": "Plastisol High-Opacity White", "Supplier Code": "PL-WHT-99", "Role": "Base Opaque / White", "Notes": "Heavy coverage underbase"}
 ]
 
-# Initialize Session State
+# Helper Function: Load Persistent Ink Library from Excel
+def load_ink_library():
+    if os.path.exists(EXCEL_FILE):
+        try:
+            xls = pd.ExcelFile(EXCEL_FILE)
+            if INK_LIBRARY_SHEET in xls.sheet_names:
+                df = pd.read_excel(xls, INK_LIBRARY_SHEET)
+                if not df.empty:
+                    return df
+        except Exception as e:
+            st.error(f"Error loading chemical library: {e}")
+    
+    # Fallback to initial library and save to file
+    df_default = pd.DataFrame(INITIAL_INK_LIBRARY)
+    save_ink_library_to_excel(df_default)
+    return df_default
+
+# Helper Function: Save Permanent Ink Library to Excel
+def save_ink_library_to_excel(df):
+    try:
+        if os.path.exists(EXCEL_FILE):
+            with pd.ExcelWriter(EXCEL_FILE, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+                df.to_excel(writer, sheet_name=INK_LIBRARY_SHEET, index=False)
+        else:
+            with pd.ExcelWriter(EXCEL_FILE, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name=INK_LIBRARY_SHEET, index=False)
+        return True
+    except Exception as e:
+        st.error(f"Failed to save library to Excel: {e}")
+        return False
+
+# Initialize Session State with Persistent Data
 if "ink_library" not in st.session_state:
-    st.session_state.ink_library = pd.DataFrame(INITIAL_INK_LIBRARY)
+    st.session_state.ink_library = load_ink_library()
 
 if "formulation_df" not in st.session_state:
     st.session_state.formulation_df = pd.DataFrame([
@@ -38,7 +70,7 @@ if "formulation_df" not in st.session_state:
         {"Delete": False, "Role": "Crosslinker / Fixer", "Product Name": "Anti-Fading Crosslinker", "Code": "XL-MOD-01", "Percentage (%)": 3.0, "Mixing Notes": "Enhances wash fastness (20+ cycles)"}
     ])
 
-# Helper Function: Load Data
+# Helper Function: Load Master Logs
 def load_data():
     if not os.path.exists(EXCEL_FILE):
         return pd.DataFrame(), pd.DataFrame()
@@ -237,13 +269,31 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
     
     batch_size = st.number_input("Target Batch Size (Grams)", value=1000.0, step=100.0, min_value=0.0)
     
-    st.caption("💡 **To Add Rows:** Click `+ Add row` at the bottom of the table. **To Delete Rows:** Check the `Delete` box and click **'🗑️ Delete Selected Rows'** below.")
+    st.caption("💡 **To Add Rows:** Click `+ Add row` at the bottom of the table. **Product Name** connects directly to your Chemical Library!")
+
+    # Fetch available product names dynamically from the Chemical Library
+    available_products = sorted(st.session_state.ink_library["Product Name"].dropna().tolist())
+    if not available_products:
+        available_products = [""]
+
+    # Build mapping dictionary from Product Name -> Supplier Code
+    code_map = dict(zip(st.session_state.ink_library["Product Name"], st.session_state.ink_library["Supplier Code"]))
+
+    # Synchronize Supplier Code automatically whenever Product Name changes
+    def sync_codes(df):
+        for idx, row in df.iterrows():
+            p_name = row.get("Product Name")
+            if p_name in code_map:
+                df.at[idx, "Code"] = code_map[p_name]
+        return df
+
+    st.session_state.formulation_df = sync_codes(st.session_state.formulation_df)
 
     # Calculate Use Quantity (g) dynamically based on Ratio (%) and Target Batch Size
     st.session_state.formulation_df["Percentage (%)"] = pd.to_numeric(st.session_state.formulation_df["Percentage (%)"], errors="coerce").fillna(0.0)
     st.session_state.formulation_df["Use Quantity (g)"] = (st.session_state.formulation_df["Percentage (%)"] / 100.0) * batch_size
 
-    # Order dataframe columns explicitly so Use Quantity (g) appears directly after Ratio (%)
+    # Order dataframe columns explicitly
     column_order = ["Delete", "Role", "Product Name", "Code", "Percentage (%)", "Use Quantity (g)", "Mixing Notes"]
     display_df = st.session_state.formulation_df.reindex(columns=column_order)
 
@@ -268,14 +318,16 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
                 ],
                 required=True
             ),
-            "Product Name": st.column_config.TextColumn(
-                "Product Name", 
-                required=True, 
-                help="e.g. Silicone Base Clear"
+            "Product Name": st.column_config.SelectboxColumn(
+                "Product Name",
+                options=available_products,
+                required=True,
+                help="Select from Chemical Library"
             ),
             "Code": st.column_config.TextColumn(
                 "Code", 
-                help="e.g. SIL-BASE-90"
+                disabled=True,
+                help="Automatically filled based on Product Name"
             ),
             "Percentage (%)": st.column_config.NumberColumn(
                 "Ratio (%)", 
@@ -298,7 +350,8 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
         key="formulation_editor"
     )
 
-    # Save current edit state back to session state
+    # Re-synchronize code and save edited values
+    edited_df = sync_codes(edited_df)
     st.session_state.formulation_df = edited_df
 
     # Explicit Delete Button Action
@@ -383,8 +436,13 @@ elif menu == "📚 Chemical & Ink Library Manager":
             if st.form_submit_button("Add to Library"):
                 if new_pname and new_code:
                     new_item = pd.DataFrame([{"Product Name": new_pname, "Supplier Code": new_code, "Role": new_role, "Notes": new_notes}])
+                    # Append to Session State
                     st.session_state.ink_library = pd.concat([st.session_state.ink_library, new_item], ignore_index=True)
-                    st.success(f"Added '{new_pname}' to chemical library!")
+                    
+                    # PERMANENTLY SAVE TO EXCEL FILE
+                    if save_ink_library_to_excel(st.session_state.ink_library):
+                        st.success(f"Added '{new_pname}' to chemical library and saved to Excel!")
+                        st.rerun()
                 else:
                     st.warning("Please provide both Product Name and Code.")
 
