@@ -101,6 +101,10 @@ def generate_pdf_report(data):
     p_style = ParagraphStyle(
         'BodyCustom', parent=styles['Normal'], fontName='Helvetica', fontSize=8.5, leading=11
     )
+    creator_style = ParagraphStyle(
+        'CreatorSig', parent=styles['Normal'], fontName='Helvetica-Oblique', fontSize=7.5, leading=10,
+        textColor=colors.HexColor('#64748B'), alignment=2, spaceBefore=10
+    )
 
     elements = []
     
@@ -187,6 +191,9 @@ def generate_pdf_report(data):
         ('PADDING', (0,0), (-1,-1), 4),
     ]))
     elements.append(t_s)
+
+    # Creator Signature (PDF Bottom Right)
+    elements.append(Paragraph("Created by: Lab Executive - Lakshan Vimukthi", creator_style))
 
     doc.build(elements)
     buffer.seek(0)
@@ -359,6 +366,9 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
             file_name=f"Recipe_Report_{recipe_id}.pdf",
             mime="application/pdf"
         )
+
+    # Web App Signature (Bottom Right)
+    st.caption("<div style='text-align: right; color: #888888; font-size: 0.8em; margin-top: 20px;'>Created by: Lab Executive - Lakshan Vimukthi</div>", unsafe_allow_html=True)
 
 elif menu == "📚 Chemical & Ink Library Manager":
     st.header("📚 Chemical & Advanced Ink Library")
