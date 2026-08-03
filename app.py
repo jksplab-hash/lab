@@ -5,6 +5,7 @@ from datetime import datetime
 import io
 import os
 import json
+import bcrypt
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -12,11 +13,92 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 
 st.set_page_config(page_title="Screen Printing R&D Portal", layout="wide", page_icon="🎨")
 
+# ==========================================
+# AUTHENTICATION & USER MANAGEMENT MODULE
+# ==========================================
+USERS_FILE = "users.json"
+
+def load_users():
+    """Load user accounts from a JSON file or create a default admin account."""
+    if os.path.exists(USERS_FILE):
+        try:
+            with open(USERS_FILE, "r") as f:
+                return json.load(f)
+        except Exception as e:
+            st.error(f"Error loading user database: {e}")
+    
+    # Default Admin Credentials if file doesn't exist
+    # Default Admin Password: admin123 (You can change this after logging in)
+    default_admin_hash = bcrypt.hashpw("admin123".encode(), bcrypt.gensalt()).decode()
+    default_users = {
+        "admin": {
+            "name": "Administrator",
+            "password": default_admin_hash,
+            "role": "admin"
+        }
+    }
+    save_users(default_users)
+    return default_users
+
+def save_users(users_dict):
+    """Save user accounts to a JSON file."""
+    try:
+        with open(USERS_FILE, "w") as f:
+            json.dump(users_dict, f, indent=4)
+        return True
+    except Exception as e:
+        st.error(f"Error saving users: {e}")
+        return False
+
+def verify_password(plain_password, hashed_password):
+    """Verify password against bcrypt hash."""
+    return bcrypt.checkpw(plain_password.encode(), hashed_password.encode())
+
+def hash_password(password):
+    """Generate bcrypt hash for a password."""
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+# Initialize authentication state
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+if "user_info" not in st.session_state:
+    st.session_state.user_info = None
+
+# Render Login Screen if not authenticated
+if not st.session_state.authenticated:
+    st.title("🎨 Screen Printing R&D Portal - Secure Login")
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown("### 🔐 Authentication Required")
+        with st.form("login_form"):
+            username_input = st.text_input("Username").strip().lower()
+            password_input = st.text_input("Password", type="password")
+            login_btn = st.form_submit_button("Sign In", use_container_width=True)
+            
+            if login_btn:
+                users = load_users()
+                user = users.get(username_input)
+                if user and verify_password(password_input, user["password"]):
+                    st.session_state.authenticated = True
+                    st.session_state.user_info = {
+                        "username": username_input,
+                        "name": user["name"],
+                        "role": user["role"]
+                    }
+                    st.success("Login successful!")
+                    st.rerun()
+                else:
+                    st.error("Invalid Username or Password.")
+    st.stop()  # Stop script execution for unauthorized users
+
+# ==========================================
+# EXCEL & FILE CONFIGURATIONS
+# ==========================================
 EXCEL_FILE = "Screen_Printing_RND_Technical_Library_Workbook.xlsx"
 INK_LIBRARY_SHEET = "Chemical Ink Library"
 RECIPE_LOG_SHEET = "Saved Technical Recipes"
 
-# Initial Default Data with Unit Prices ($/kg)
 INITIAL_INK_LIBRARY = [
     {"Product Name": "Silicone Base Clear", "Supplier Code": "SIL-BASE-90", "Role": "Base Transparent", "Unit Price ($/kg)": 14.50, "Notes": "High elasticity silicone base"},
     {"Product Name": "Silicone White Undercoat", "Supplier Code": "SIL-WHT-10", "Role": "Base Opaque / White", "Unit Price ($/kg)": 12.00, "Notes": "Provides opacity & bleed barrier"},
@@ -117,7 +199,7 @@ def get_next_recipe_id():
         return f"RND-REC-{year}-001"
     return f"RND-REC-{year}-{len(df_recipes) + 1:03d}"
 
-# Initialize Session State
+# Initialize Session State Variables
 if "ink_library" not in st.session_state:
     st.session_state.ink_library = load_ink_library()
 
@@ -298,21 +380,41 @@ def generate_pdf_report(data):
     buffer.seek(0)
     return buffer.getvalue()
 
-st.title("🎨 Screen Printing R&D & Costing Portal")
+# ==========================================
+# SIDEBAR HEADER & LOGOUT
+# ==========================================
+st.sidebar.markdown(f"👤 Logged in as: **{st.session_state.user_info['name']}**")
+st.sidebar.markdown(f"🏷️ Role: **{st.session_state.user_info['role'].capitalize()}**")
 
-menu = st.sidebar.radio(
-    "Select Action", 
-    [
-        "🎨 Technical Recipe Builder & Report Generator", 
-        "📖 View & Search Saved Recipes",
-        "📚 Chemical & Ink Library Manager",
-        "🧪 Log R&D Trial Result", 
-        "📊 View Master Trial Log", 
-        "🧩 Fabric Compatibility Matrix"
-    ]
-)
+if st.sidebar.button("🚪 Logout"):
+    st.session_state.authenticated = False
+    st.session_state.user_info = None
+    st.rerun()
+
+st.sidebar.divider()
+
+# Navigation Options
+menu_options = [
+    "🎨 Technical Recipe Builder & Report Generator", 
+    "📖 View & Search Saved Recipes",
+    "📚 Chemical & Ink Library Manager",
+    "🧪 Log R&D Trial Result", 
+    "📊 View Master Trial Log", 
+    "🧩 Fabric Compatibility Matrix"
+]
+
+# Append Admin Panel option ONLY if user is Admin
+if st.session_state.user_info["role"] == "admin":
+    menu_options.append("🔑 Admin User Management")
+
+menu = st.sidebar.radio("Select Action", menu_options)
+
+# ==========================================
+# APP PAGES & LOGIC
+# ==========================================
 
 if menu == "🎨 Technical Recipe Builder & Report Generator":
+    st.title("🎨 Screen Printing R&D & Costing Portal")
     st.header("1. Job Header & Substrate Specifications")
     auto_recipe_id = get_next_recipe_id()
 
@@ -320,7 +422,7 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
     with col1:
         recipe_id = st.text_input("Recipe ID (Auto-Generated)", value=auto_recipe_id, disabled=True)
         style_name = st.text_input("Style Name / No", value="", placeholder="e.g. ST-2026-GYMSHARK-01")
-        created_by = st.text_input("Created by", value="", placeholder="e.g. John Doe / Lab Exec")
+        created_by = st.text_input("Created by", value=st.session_state.user_info['name'], placeholder="e.g. John Doe / Lab Exec")
         fabric_comp = st.text_input("Fabric Composition", value="", placeholder="e.g. 95% Cotton / 5% Elastane")
         fabric_const = st.text_input("Fabric Construction", value="", placeholder="e.g. Single Jersey (Knitted)")
         dye_migration = st.selectbox("Dye Migration Risk", ["Low", "Medium", "High", "Critical"], index=1)
@@ -548,33 +650,101 @@ elif menu == "📚 Chemical & Ink Library Manager":
     st.dataframe(st.session_state.ink_library, use_container_width=True)
 
 elif menu == "🧪 Log R&D Trial Result":
-    st.header("Log Experimental & Durability Trial Result")
+    st.header("🧪 Log Experimental & Durability Trial Result")
     with st.form("log_trial_form"):
         col1, col2 = st.columns(2)
         with col1:
             trial_id = st.text_input("Trial ID", value="TR-2026-006")
             style_ref = st.text_input("Style / Reference", value="ST-2026-GYM-01")
             fabric_type = st.text_input("Fabric Type", value="95% Ctn / 5% Elastane")
-            recipe_var = st.text_area("Recipe / Parameter Variation", value="Added 3% Crosslinker XL-MOD-01")
-            crocking_res = st.text_input("Crocking Result", value="Grade 4.5")
+            technique = st.text_input("Technique", value="Silicone Screen Print")
+            wash_result = st.text_input("Wash Test Result", value="Pass - 20 Cycles")
         with col2:
-            trial_date = st.date_input("Date", value=datetime.now().date())
-            technique = st.selectbox("Technique", ["Silicone", "Rubber Print", "High Density", "Flock Print", "Glitter Print"])
-            objective = st.text_area("Trial Objective", value="Improve wash fastness past 20 cycles")
-            wash_res = st.text_input("Wash Result (20 Cycles)", value="Grade 4.5 (Pass)")
-            status = st.selectbox("Overall Status", ["APPROVED", "REJECTED", "PENDING"])
-        
-        if st.form_submit_button("Save Trial Log"):
-            trial_data = {"Trial ID": trial_id, "Date": str(trial_date), "Style / Reference": style_ref, "Technique": technique, "Fabric Type": fabric_type, "Objective": objective, "Recipe Variation": recipe_var, "Wash Result": wash_res, "Crocking Result": crocking_res, "Status": status}
-            if save_trial_to_excel(trial_data):
-                st.success(f"Trial {trial_id} saved successfully!")
+            trial_date = st.date_input("Trial Date", value=datetime.now().date())
+            objective = st.text_input("Objective", value="Improve Wash Fastness")
+            recipe_var = st.text_area("Recipe / Parameter Variation", value="Added 3% Crosslinker")
+            crock_result = st.text_input("Crocking Test Result", value="Grade 4.5 Dry / Grade 4 Wet")
+            status = st.selectbox("Trial Status", ["Pass", "Fail", "Pending Approval"])
+            
+        if st.form_submit_button("💾 Save Trial Log"):
+            trial_record = {
+                "Trial ID": trial_id, "Date": str(trial_date), "Style / Reference": style_ref,
+                "Technique": technique, "Fabric Type": fabric_type, "Objective": objective,
+                "Recipe Variation": recipe_var, "Wash Result": wash_result,
+                "Crocking Result": crock_result, "Status": status
+            }
+            if save_trial_to_excel(trial_record):
+                st.success(f"Trial Log {trial_id} saved successfully!")
 
 elif menu == "📊 View Master Trial Log":
-    st.header("R&D Master Experimental & Durability Trial Log")
-    fresh_trials, _ = load_data()
-    st.dataframe(fresh_trials, use_container_width=True) if not fresh_trials.empty else st.info("No trial records found.")
+    st.header("📊 Master R&D Trial Logs")
+    trials_df, _ = load_data()
+    if not trials_df.empty:
+        st.dataframe(trials_df, use_container_width=True)
+    else:
+        st.info("No trial logs found in the workbook yet.")
 
 elif menu == "🧩 Fabric Compatibility Matrix":
-    st.header("Print Technique vs. Fabric Substrate Compatibility Matrix")
-    _, fresh_matrix = load_data()
-    st.dataframe(fresh_matrix, use_container_width=True) if not fresh_matrix.empty else st.info("No compatibility matrix sheet found.")
+    st.header("🧩 Fabric & Ink Compatibility Matrix")
+    _, matrix_df = load_data()
+    if not matrix_df.empty:
+        st.dataframe(matrix_df, use_container_width=True)
+    else:
+        st.info("No compatibility matrix found in workbook.")
+
+# ==========================================
+# ADMIN PANEL (Only accessible to Admin Role)
+# ==========================================
+elif menu == "🔑 Admin User Management" and st.session_state.user_info["role"] == "admin":
+    st.header("🔑 User Management & Access Control")
+    users = load_users()
+
+    # SECTION 1: Create New Account
+    st.subheader("➕ Create New Account for Colleague")
+    with st.form("create_user_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            new_username = st.text_input("Username").strip().lower()
+            new_name = st.text_input("Full Name")
+        with col2:
+            new_password = st.text_input("Password", type="password")
+            new_role = st.selectbox("Account Role", ["colleague", "admin"])
+
+        submit_user = st.form_submit_button("Create User Account")
+        if submit_user:
+            if not new_username or not new_password:
+                st.warning("Please fill in both Username and Password.")
+            elif new_username in users:
+                st.error("Username already exists!")
+            else:
+                users[new_username] = {
+                    "name": new_name or new_username,
+                    "password": hash_password(new_password),
+                    "role": new_role
+                }
+                if save_users(users):
+                    st.success(f"✅ Account for user **'{new_username}'** created successfully!")
+                    st.rerun()
+
+    st.divider()
+
+    # SECTION 2: List Existing Users & Delete
+    st.subheader("👥 Current Authorized Users")
+    user_list = []
+    for uname, info in users.items():
+        user_list.append({
+            "Username": uname,
+            "Full Name": info.get("name", ""),
+            "Role": info.get("role", "colleague")
+        })
+    
+    st.dataframe(pd.DataFrame(user_list), use_container_width=True)
+
+    # Delete User
+    del_username = st.selectbox("Select user to remove", [u for u in users.keys() if u != "admin"])
+    if st.button("❌ Remove User Account"):
+        if del_username in users:
+            del users[del_username]
+            if save_users(users):
+                st.success(f"User '{del_username}' removed.")
+                st.rerun()
