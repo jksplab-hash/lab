@@ -225,7 +225,7 @@ def generate_pdf_report(data):
     elements.append(t_s)
 
     # Creator Signature (PDF Bottom Right)
-    elements.append(Paragraph("Created by: Lab Executive - Lakshan Vimukthi", creator_style))
+    elements.append(Paragraph("Developed by: Lab Executive - Lakshan Vimukthi", creator_style))
 
     doc.build(elements)
     buffer.seek(0)
@@ -421,7 +421,7 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
         )
 
     # Web App Signature (Bottom Right)
-    st.caption("<div style='text-align: right; color: #888888; font-size: 0.8em; margin-top: 20px;'>Created by: Lab Executive - Lakshan Vimukthi</div>", unsafe_allow_html=True)
+    st.caption("<div style='text-align: right; color: #888888; font-size: 0.8em; margin-top: 20px;'>Developed by: Lab Executive - Lakshan Vimukthi</div>", unsafe_allow_html=True)
 
 elif menu == "📚 Chemical & Ink Library Manager":
     st.header("📚 Chemical & Advanced Ink Library")
