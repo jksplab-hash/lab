@@ -10,7 +10,7 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
 
-st.set_page_config(page_title="Screen Printing R&D Portal", layout="wide", page_icon="🎨")
+st.set_page_config(page_title="Screen Printing Portal", layout="wide", page_icon="🎨")
 
 EXCEL_FILE = "Screen_Printing_RND_Technical_Library_Workbook.xlsx"
 INK_LIBRARY_SHEET = "Chemical Ink Library"
@@ -340,18 +340,18 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
     col1, col2 = st.columns(2)
     with col1:
         recipe_id = st.text_input("Recipe ID (Auto-Generated)", value=auto_recipe_id, disabled=True)
-        style_name = st.text_input("Style Name / No", value="ST-2026-GYMSHARK-01", placeholder="e.g. ST-2026-GYMSHARK-01")
-        created_by = st.text_input("Created by", value="Durability Lab Exec", placeholder="e.g. John Doe / Lab Exec")
-        fabric_comp = st.text_input("Fabric Composition", value="95% Cotton / 5% Elastane", placeholder="e.g. 95% Cotton / 5% Elastane")
-        fabric_const = st.text_input("Fabric Construction", value="Single Jersey (Knitted)", placeholder="e.g. Single Jersey (Knitted)")
+        style_name = st.text_input("Style Name / No", value="", placeholder="e.g. ST-2026-GYMSHARK-01")
+        created_by = st.text_input("Created by", value="", placeholder="e.g. John Doe / Lab Exec")
+        fabric_comp = st.text_input("Fabric Composition", value="", placeholder="e.g. 95% Cotton / 5% Elastane")
+        fabric_const = st.text_input("Fabric Construction", value="", placeholder="e.g. Single Jersey (Knitted)")
         dye_migration = st.selectbox("Dye Migration Risk", ["Low", "Medium", "High", "Critical"], index=1)
     
     with col2:
         rec_date = st.date_input("Date", value=datetime.now().date())
-        print_tech = st.text_input("Print Technique", value="Silicone Rubber", placeholder="e.g. Silicone Rubber, High Density")
+        print_tech = st.text_input("Print Technique", value="", placeholder="e.g. Silicone Rubber, High Density")
         revision = st.text_input("Revision No", value="v2.1", placeholder="e.g. v1.0, v2.1")
-        fabric_color = st.text_input("Fabric Color / CW", value="Charcoal Dark Grey", placeholder="e.g. Charcoal Dark Grey")
-        gsm = st.text_input("GSM", value="220 GSM", placeholder="e.g. 180 GSM, 220 GSM")
+        fabric_color = st.text_input("Fabric Color / CW", value="", placeholder="e.g. Charcoal Dark Grey")
+        gsm = st.text_input("GSM", value="", placeholder="e.g. 180 GSM, 220 GSM")
         undercoat = st.text_input("Undercoat Required", value="Yes (Anti-Bleed Barrier)", placeholder="e.g. Yes (Anti-Bleed Barrier)")
 
     st.divider()
@@ -420,15 +420,15 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
     st.header("3. Technical Printing & Machine Setup Parameters")
     m_col1, m_col2 = st.columns(2)
     with m_col1:
-        mesh = st.text_input("Mesh Count (T/Inch)", value="120T (305 Mesh)", placeholder="e.g. 120T (305 Mesh)")
-        squeegee_duro = st.text_input("Squeegee Durometer", value="70/90/70 Triple", placeholder="e.g. 70/90/70 Triple")
-        squeegee_angle = st.text_input("Squeegee Angle / Speed", value="75° / Medium Speed", placeholder="e.g. 75° / Medium Speed")
-        off_contact = st.text_input("Off-Contact Distance", value="2.5 mm", placeholder="e.g. 2.5 mm")
+        mesh = st.text_input("Mesh Count (T/Inch)", value="", placeholder="e.g. 120T (305 Mesh)")
+        squeegee_duro = st.text_input("Squeegee Durometer", value="", placeholder="e.g. 70/90/70 Triple")
+        squeegee_angle = st.text_input("Squeegee Angle / Speed", value="", placeholder="e.g. 75° / Medium Speed")
+        off_contact = st.text_input("Off-Contact Distance", value="", placeholder="e.g. 2.5 mm")
     with m_col2:
-        flash_cure = st.text_input("Flash Cure Temp / Time", value="110°C / 5 Seconds", placeholder="e.g. 110°C / 5 Seconds")
-        main_cure = st.text_input("Main Curing Temp", value="100°C", placeholder="e.g. 100°C")
-        belt_speed = st.text_input("Drying Belt Speed / Time", value="90sec", placeholder="e.g. 90sec")
-        passes = st.text_input("Number of Passes / Strokes", value="2 Print - 1 Flash - 2 Print", placeholder="e.g. 2 Print - 1 Flash - 2 Print")
+        flash_cure = st.text_input("Flash Cure Temp / Time", value="", placeholder="e.g. 110°C / 5 Seconds")
+        main_cure = st.text_input("Main Curing Temp", value="", placeholder="e.g. 100°C")
+        belt_speed = st.text_input("Drying Belt Speed / Time", value="", placeholder="e.g. 90sec")
+        passes = st.text_input("Number of Passes / Strokes", value="", placeholder="e.g. 2 Print - 1 Flash - 2 Print")
 
     st.divider()
     st.header("4. Sign-off Status")
