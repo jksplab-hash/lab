@@ -4,6 +4,7 @@ import openpyxl
 from datetime import datetime
 import io
 import os
+import json
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -13,6 +14,7 @@ st.set_page_config(page_title="Screen Printing R&D Portal", layout="wide", page_
 
 EXCEL_FILE = "Screen_Printing_RND_Technical_Library_Workbook.xlsx"
 INK_LIBRARY_SHEET = "Chemical Ink Library"
+RECIPE_LOG_SHEET = "Saved Technical Recipes"
 
 # Initial Default Data (used only if Excel sheet doesn't exist yet)
 INITIAL_INK_LIBRARY = [
@@ -57,7 +59,58 @@ def save_ink_library_to_excel(df):
         st.error(f"Failed to save library to Excel: {e}")
         return False
 
-# Initialize Session State with Persistent Data
+# Helper Function: Load All Saved Recipes
+def load_saved_recipes():
+    if os.path.exists(EXCEL_FILE):
+        try:
+            xls = pd.ExcelFile(EXCEL_FILE)
+            if RECIPE_LOG_SHEET in xls.sheet_names:
+                df = pd.read_excel(xls, RECIPE_LOG_SHEET)
+                return df
+        except Exception as e:
+            st.error(f"Error loading recipes: {e}")
+    return pd.DataFrame()
+
+# Helper Function: Save New Recipe to Excel
+def save_recipe_to_excel(recipe_data):
+    try:
+        # Convert formulation list/dict into JSON string for flat Excel storage
+        data_to_save = recipe_data.copy()
+        data_to_save['formulation'] = json.dumps(recipe_data['formulation'])
+
+        if not os.path.exists(EXCEL_FILE):
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = RECIPE_LOG_SHEET
+            ws.append(list(data_to_save.keys()))
+            ws.append(list(data_to_save.values()))
+            wb.save(EXCEL_FILE)
+        else:
+            df_existing = load_saved_recipes()
+            new_row = pd.DataFrame([data_to_save])
+            if not df_existing.empty:
+                df_updated = pd.concat([df_existing, new_row], ignore_index=True)
+            else:
+                df_updated = new_row
+            
+            with pd.ExcelWriter(EXCEL_FILE, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+                df_updated.to_excel(writer, sheet_name=RECIPE_LOG_SHEET, index=False)
+        return True
+    except Exception as e:
+        st.error(f"Failed to save recipe to Excel: {e}")
+        return False
+
+# Helper Function: Generate Automatic Recipe ID
+def get_next_recipe_id():
+    df_recipes = load_saved_recipes()
+    year = datetime.now().year
+    if df_recipes.empty:
+        return f"RND-REC-{year}-001"
+    
+    count = len(df_recipes) + 1
+    return f"RND-REC-{year}-{count:03d}"
+
+# Initialize Session State
 if "ink_library" not in st.session_state:
     st.session_state.ink_library = load_ink_library()
 
@@ -133,9 +186,13 @@ def generate_pdf_report(data):
     p_style = ParagraphStyle(
         'BodyCustom', parent=styles['Normal'], fontName='Helvetica', fontSize=8.5, leading=11
     )
+    created_by_style = ParagraphStyle(
+        'CreatedBySig', parent=styles['Normal'], fontName='Helvetica-Oblique', fontSize=7.5, leading=10,
+        textColor=colors.HexColor('#64748B'), alignment=0
+    )
     creator_style = ParagraphStyle(
         'CreatorSig', parent=styles['Normal'], fontName='Helvetica-Oblique', fontSize=7.5, leading=10,
-        textColor=colors.HexColor('#64748B'), alignment=2, spaceBefore=10
+        textColor=colors.HexColor('#64748B'), alignment=2
     )
 
     elements = []
@@ -149,7 +206,7 @@ def generate_pdf_report(data):
     h_data = [
         [Paragraph("<b>Recipe ID:</b>", p_style), Paragraph(str(data['recipe_id']), p_style), Paragraph("<b>Date:</b>", p_style), Paragraph(str(data['date']), p_style)],
         [Paragraph("<b>Style Name/No:</b>", p_style), Paragraph(str(data['style_name']), p_style), Paragraph("<b>Print Technique:</b>", p_style), Paragraph(str(data['print_tech']), p_style)],
-        [Paragraph("<b>Developer / Exec:</b>", p_style), Paragraph(str(data['developer']), p_style), Paragraph("<b>Revision No:</b>", p_style), Paragraph(str(data['revision']), p_style)],
+        [Paragraph("<b>Created by:</b>", p_style), Paragraph(str(data['created_by']), p_style), Paragraph("<b>Revision No:</b>", p_style), Paragraph(str(data['revision']), p_style)],
     ]
     t_h = Table(h_data, colWidths=[95, 170, 95, 170])
     t_h.setStyle(TableStyle([
@@ -178,7 +235,12 @@ def generate_pdf_report(data):
     ink_headers = ["Component Role", "Chemical / Ink Product Name", "Code", "Ratio (%)", "Use Qty (g)", "Mixing Notes"]
     i_table = [[Paragraph(f"<b>{h}</b>", ParagraphStyle('TH', parent=p_style, textColor=colors.white)) for h in ink_headers]]
     
-    for row in data['formulation']:
+    # Check if formulation is string (JSON) or list of dicts
+    formulation_list = data['formulation']
+    if isinstance(formulation_list, str):
+        formulation_list = json.loads(formulation_list)
+
+    for row in formulation_list:
         i_table.append([
             Paragraph(str(row.get('Role', '')), p_style),
             Paragraph(str(row.get('Product Name', '')), p_style),
@@ -223,9 +285,24 @@ def generate_pdf_report(data):
         ('PADDING', (0,0), (-1,-1), 4),
     ]))
     elements.append(t_s)
+    elements.append(Spacer(1, 10))
 
-    # Creator Signature (PDF Bottom Right)
-    elements.append(Paragraph("Developed by: Lab Executive - Lakshan Vimukthi", creator_style))
+    # PDF Bottom Signatures
+    footer_table_data = [
+        [
+            Paragraph(f"Created by: {data['created_by']}", created_by_style),
+            Paragraph("Developed by: Lab Executive - Lakshan Vimukthi", creator_style)
+        ]
+    ]
+    t_footer = Table(footer_table_data, colWidths=[265, 265])
+    t_footer.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(t_footer)
 
     doc.build(elements)
     buffer.seek(0)
@@ -237,6 +314,7 @@ menu = st.sidebar.radio(
     "Select Action", 
     [
         "🎨 Technical Recipe Builder & Report Generator", 
+        "📖 View & Search Saved Recipes",
         "📚 Chemical & Ink Library Manager",
         "🧪 Log R&D Trial Result", 
         "📊 View Master Trial Log", 
@@ -247,17 +325,20 @@ menu = st.sidebar.radio(
 if menu == "🎨 Technical Recipe Builder & Report Generator":
     st.header("1. Job Header & Substrate Specifications")
     
+    # AUTOMATICALLY INCREMENTED RECIPE ID (DISABLED FOR MANUAL INPUT)
+    auto_recipe_id = get_next_recipe_id()
+
     col1, col2 = st.columns(2)
     with col1:
-        recipe_id = st.text_input("Recipe ID", value="RND-REC-2026-001", placeholder="e.g. RND-REC-2026-001")
+        recipe_id = st.text_input("Recipe ID (Auto-Generated)", value=auto_recipe_id, disabled=True)
         style_name = st.text_input("Style Name / No", value="ST-2026-GYMSHARK-01", placeholder="e.g. ST-2026-GYMSHARK-01")
-        developer = st.text_input("Developer / Exec", value="Durability Lab Exec", placeholder="e.g. John Doe / Lab Exec")
+        created_by = st.text_input("Created by", value="Durability Lab Exec", placeholder="e.g. John Doe / Lab Exec")
         fabric_comp = st.text_input("Fabric Composition", value="95% Cotton / 5% Elastane", placeholder="e.g. 95% Cotton / 5% Elastane")
         fabric_const = st.text_input("Fabric Construction", value="Single Jersey (Knitted)", placeholder="e.g. Single Jersey (Knitted)")
         dye_migration = st.selectbox("Dye Migration Risk", ["Low", "Medium", "High", "Critical"], index=1)
     
     with col2:
-        rec_date = st.date_input("Date", value=datetime(2026, 8, 1))
+        rec_date = st.date_input("Date", value=datetime.now().date())
         print_tech = st.text_input("Print Technique", value="Silicone Rubber", placeholder="e.g. Silicone Rubber, High Density")
         revision = st.text_input("Revision No", value="v2.1", placeholder="e.g. v1.0, v2.1")
         fabric_color = st.text_input("Fabric Color / CW", value="Charcoal Dark Grey", placeholder="e.g. Charcoal Dark Grey")
@@ -269,17 +350,12 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
     
     batch_size = st.number_input("Target Batch Size (Grams)", value=1000.0, step=100.0, min_value=0.0)
     
-    st.caption("💡 **To Add Rows:** Click `+ Add row` at the bottom of the table. **Product Name** connects directly to your Chemical Library!")
-
-    # Fetch available product names dynamically from the Chemical Library
     available_products = sorted(st.session_state.ink_library["Product Name"].dropna().tolist())
     if not available_products:
         available_products = [""]
 
-    # Build mapping dictionary from Product Name -> Supplier Code
     code_map = dict(zip(st.session_state.ink_library["Product Name"], st.session_state.ink_library["Supplier Code"]))
 
-    # Synchronize Supplier Code automatically whenever Product Name changes
     def sync_codes(df):
         for idx, row in df.iterrows():
             p_name = row.get("Product Name")
@@ -289,72 +365,31 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
 
     st.session_state.formulation_df = sync_codes(st.session_state.formulation_df)
 
-    # Calculate Use Quantity (g) dynamically based on Ratio (%) and Target Batch Size
     st.session_state.formulation_df["Percentage (%)"] = pd.to_numeric(st.session_state.formulation_df["Percentage (%)"], errors="coerce").fillna(0.0)
     st.session_state.formulation_df["Use Quantity (g)"] = (st.session_state.formulation_df["Percentage (%)"] / 100.0) * batch_size
 
-    # Order dataframe columns explicitly
     column_order = ["Delete", "Role", "Product Name", "Code", "Percentage (%)", "Use Quantity (g)", "Mixing Notes"]
     display_df = st.session_state.formulation_df.reindex(columns=column_order)
 
-    # Interactive Spreadsheet Table
     edited_df = st.data_editor(
         display_df,
         num_rows="dynamic",
         column_config={
             "Delete": st.column_config.CheckboxColumn("Delete?", default=False),
-            "Role": st.column_config.SelectboxColumn(
-                "Component Role",
-                options=[
-                    "Base Transparent",
-                    "Base Opaque / White",
-                    "Pigment Colorant",
-                    "Catalyst / Hardener",
-                    "Crosslinker / Fixer",
-                    "Additive / Retarder",
-                    "Thinner / Reducer",
-                    "Thickeners",
-                    "Other"
-                ],
-                required=True
-            ),
-            "Product Name": st.column_config.SelectboxColumn(
-                "Product Name",
-                options=available_products,
-                required=True,
-                help="Select from Chemical Library"
-            ),
-            "Code": st.column_config.TextColumn(
-                "Code", 
-                disabled=True,
-                help="Automatically filled based on Product Name"
-            ),
-            "Percentage (%)": st.column_config.NumberColumn(
-                "Ratio (%)", 
-                min_value=0.0, 
-                max_value=100.0, 
-                step=0.5, 
-                format="%.1f%%"
-            ),
-            "Use Quantity (g)": st.column_config.NumberColumn(
-                "Use Quantity (g)", 
-                disabled=True,
-                format="%.1f g"
-            ),
-            "Mixing Notes": st.column_config.TextColumn(
-                "Mixing Notes", 
-                help="e.g. Mix thoroughly before printing"
-            )
+            "Role": st.column_config.SelectboxColumn("Component Role", options=["Base Transparent", "Base Opaque / White", "Pigment Colorant", "Catalyst / Hardener", "Crosslinker / Fixer", "Additive / Retarder", "Thinner / Reducer", "Thickeners", "Other"], required=True),
+            "Product Name": st.column_config.SelectboxColumn("Product Name", options=available_products, required=True),
+            "Code": st.column_config.TextColumn("Code", disabled=True),
+            "Percentage (%)": st.column_config.NumberColumn("Ratio (%)", min_value=0.0, max_value=100.0, step=0.5, format="%.1f%%"),
+            "Use Quantity (g)": st.column_config.NumberColumn("Use Quantity (g)", disabled=True, format="%.1f g"),
+            "Mixing Notes": st.column_config.TextColumn("Mixing Notes")
         },
         use_container_width=True,
         key="formulation_editor"
     )
 
-    # Re-synchronize code and save edited values
     edited_df = sync_codes(edited_df)
     st.session_state.formulation_df = edited_df
 
-    # Explicit Delete Button Action
     if st.button("🗑️ Delete Selected Rows"):
         if "Delete" in edited_df.columns:
             filtered_df = edited_df[edited_df["Delete"] == False].reset_index(drop=True)
@@ -400,7 +435,7 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
     
     recipe_summary = {
         'recipe_id': recipe_id, 'date': str(rec_date), 'style_name': style_name,
-        'print_tech': print_tech, 'developer': developer, 'revision': revision,
+        'print_tech': print_tech, 'created_by': created_by, 'revision': revision,
         'fabric_comp': fabric_comp, 'fabric_color': fabric_color, 'fabric_const': fabric_const,
         'gsm': gsm, 'dye_risk': dye_migration, 'undercoat': undercoat,
         'batch_size': batch_size, 'formulation': calc_df.to_dict(orient="records"),
@@ -410,18 +445,65 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
         'sig_sample': sig_sample, 'sig_prod': sig_prod
     }
 
-    if st.button("Generate Technical Specification Report (PDF)"):
-        pdf_bytes = generate_pdf_report(recipe_summary)
-        st.success("✅ Technical Recipe Report generated successfully!")
-        st.download_button(
-            label="💾 Download PDF Specification Report",
-            data=pdf_bytes,
-            file_name=f"Recipe_Report_{recipe_id}.pdf",
-            mime="application/pdf"
-        )
+    btn_col1, btn_col2 = st.columns(2)
+    
+    with btn_col1:
+        if st.button("💾 Save Recipe to Master Library"):
+            if save_recipe_to_excel(recipe_summary):
+                st.success(f"✅ Recipe '{recipe_id}' saved to Excel successfully!")
+                st.rerun()
 
-    # Web App Signature (Bottom Right)
+    with btn_col2:
+        if st.button("📄 Generate PDF Specification Report"):
+            pdf_bytes = generate_pdf_report(recipe_summary)
+            st.success("✅ PDF Specification Report generated!")
+            st.download_button(
+                label="💾 Download PDF Report",
+                data=pdf_bytes,
+                file_name=f"Recipe_Report_{recipe_id}.pdf",
+                mime="application/pdf"
+            )
+
     st.caption("<div style='text-align: right; color: #888888; font-size: 0.8em; margin-top: 20px;'>Developed by: Lab Executive - Lakshan Vimukthi</div>", unsafe_allow_html=True)
+
+elif menu == "📖 View & Search Saved Recipes":
+    st.header("📖 Saved Technical Recipes Library")
+    df_recipes = load_saved_recipes()
+
+    if df_recipes.empty:
+        st.info("No saved recipes found. Create and save a new recipe from the Recipe Builder!")
+    else:
+        st.dataframe(df_recipes[['recipe_id', 'date', 'style_name', 'print_tech', 'created_by', 'revision', 'fabric_comp']], use_container_width=True)
+        
+        st.divider()
+        st.subheader("🔍 Select Recipe to Inspect / Print PDF")
+        
+        recipe_options = df_recipes['recipe_id'].tolist()
+        selected_id = st.selectbox("Select Recipe ID", options=recipe_options)
+
+        if selected_id:
+            recipe_row = df_recipes[df_recipes['recipe_id'] == selected_id].iloc[0].to_dict()
+            
+            st.markdown(f"### Details for `{recipe_row['recipe_id']}`")
+            col1, col2, col3 = st.columns(3)
+            col1.write(f"**Style Name:** {recipe_row['style_name']}")
+            col1.write(f"**Date:** {recipe_row['date']}")
+            col2.write(f"**Print Tech:** {recipe_row['print_tech']}")
+            col2.write(f"**Created By:** {recipe_row['created_by']}")
+            col3.write(f"**Fabric Comp:** {recipe_row['fabric_comp']}")
+            col3.write(f"**Fabric Color:** {recipe_row['fabric_color']}")
+
+            st.write("#### Ink Formulation Table")
+            form_data = json.loads(recipe_row['formulation']) if isinstance(recipe_row['formulation'], str) else recipe_row['formulation']
+            st.dataframe(pd.DataFrame(form_data), use_container_width=True)
+
+            pdf_bytes = generate_pdf_report(recipe_row)
+            st.download_button(
+                label=f"💾 Re-Download PDF for {recipe_row['recipe_id']}",
+                data=pdf_bytes,
+                file_name=f"Recipe_Report_{recipe_row['recipe_id']}.pdf",
+                mime="application/pdf"
+            )
 
 elif menu == "📚 Chemical & Ink Library Manager":
     st.header("📚 Chemical & Advanced Ink Library")
@@ -436,10 +518,7 @@ elif menu == "📚 Chemical & Ink Library Manager":
             if st.form_submit_button("Add to Library"):
                 if new_pname and new_code:
                     new_item = pd.DataFrame([{"Product Name": new_pname, "Supplier Code": new_code, "Role": new_role, "Notes": new_notes}])
-                    # Append to Session State
                     st.session_state.ink_library = pd.concat([st.session_state.ink_library, new_item], ignore_index=True)
-                    
-                    # PERMANENTLY SAVE TO EXCEL FILE
                     if save_ink_library_to_excel(st.session_state.ink_library):
                         st.success(f"Added '{new_pname}' to chemical library and saved to Excel!")
                         st.rerun()
@@ -459,7 +538,7 @@ elif menu == "🧪 Log R&D Trial Result":
             recipe_var = st.text_area("Recipe / Parameter Variation", value="Added 3% Crosslinker XL-MOD-01", placeholder="e.g. Added 3% Crosslinker XL-MOD-01")
             crocking_res = st.text_input("Crocking Result", value="Grade 4.5", placeholder="e.g. Grade 4.5")
         with col2:
-            trial_date = st.date_input("Date", value=datetime(2026, 8, 1))
+            trial_date = st.date_input("Date", value=datetime.now().date())
             technique = st.selectbox("Technique", ["Silicone", "Rubber Print", "High Density", "Flock Print", "Glitter Print"])
             objective = st.text_area("Trial Objective", value="Improve wash fastness past 20 cycles", placeholder="e.g. Improve wash fastness past 20 cycles")
             wash_res = st.text_input("Wash Result (20 Cycles)", value="Grade 4.5 (Pass)", placeholder="e.g. Grade 4.5 (Pass)")
