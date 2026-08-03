@@ -171,7 +171,14 @@ def save_trial_to_excel(trial_data):
 # PDF Generator Function
 def generate_pdf_report(data):
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
+    doc = SimpleDocTemplate(
+        buffer, 
+        pagesize=A4, 
+        rightMargin=25, 
+        leftMargin=25, 
+        topMargin=25, 
+        bottomMargin=35
+    )
     styles = getSampleStyleSheet()
     
     title_style = ParagraphStyle('HeaderTitle', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=14, leading=16, textColor=colors.HexColor('#1E293B'), alignment=1)
@@ -187,24 +194,34 @@ def generate_pdf_report(data):
     
     # Header Info
     h_data = [
-        [Paragraph("<b>Recipe ID:</b>", p_style), Paragraph(str(data['recipe_id']), p_style), Paragraph("<b>Date:</b>", p_style), Paragraph(str(data['date']), p_style)],
-        [Paragraph("<b>Style Name/No:</b>", p_style), Paragraph(str(data['style_name']), p_style), Paragraph("<b>Print Tech:</b>", p_style), Paragraph(str(data['print_tech']), p_style)],
-        [Paragraph("<b>Created by:</b>", p_style), Paragraph(str(data['created_by']), p_style), Paragraph("<b>Revision:</b>", p_style), Paragraph(str(data['revision']), p_style)],
+        [Paragraph("<b>Recipe ID:</b>", p_style), Paragraph(str(data.get('recipe_id', '')), p_style), Paragraph("<b>Date:</b>", p_style), Paragraph(str(data.get('date', '')), p_style)],
+        [Paragraph("<b>Style Name/No:</b>", p_style), Paragraph(str(data.get('style_name', '')), p_style), Paragraph("<b>Print Tech:</b>", p_style), Paragraph(str(data.get('print_tech', '')), p_style)],
+        [Paragraph("<b>Created by:</b>", p_style), Paragraph(str(data.get('created_by', '')), p_style), Paragraph("<b>Revision:</b>", p_style), Paragraph(str(data.get('revision', '')), p_style)],
+        [Paragraph("<b>Fabric Comp:</b>", p_style), Paragraph(str(data.get('fabric_comp', '')), p_style), Paragraph("<b>Fabric Color:</b>", p_style), Paragraph(str(data.get('fabric_color', '')), p_style)],
+        [Paragraph("<b>Fabric Const:</b>", p_style), Paragraph(str(data.get('fabric_const', '')), p_style), Paragraph("<b>GSM:</b>", p_style), Paragraph(str(data.get('gsm', '')), p_style)],
+        [Paragraph("<b>Dye Migration Risk:</b>", p_style), Paragraph(str(data.get('dye_risk', '')), p_style), Paragraph("<b>Undercoat Req:</b>", p_style), Paragraph(str(data.get('undercoat', '')), p_style)]
     ]
     t_h = Table(h_data, colWidths=[90, 180, 90, 180])
-    t_h.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F8FAFC')), ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')), ('PADDING', (0,0), (-1,-1), 3)]))
+    t_h.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F8FAFC')), 
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')), 
+        ('PADDING', (0,0), (-1,-1), 3)
+    ]))
     elements.append(t_h)
     
     # Bulk Production & Cost Planning
     elements.append(Paragraph("1. BULK PRODUCTION & MATERIAL PLANNING (RM REQUIREMENT)", sec_style))
     p_data = [
-        [Paragraph("<b>Target Sample Pcs:</b>", p_style), Paragraph(f"{data['target_pcs']} pcs", p_style), Paragraph("<b>Order Quantity:</b>", p_style), Paragraph(f"{data['order_qty']:,} pcs", p_style)],
-        [Paragraph("<b>Batch Size:</b>", p_style), Paragraph(f"{data['batch_size']} g", p_style), Paragraph("<b>Wastage Allowance:</b>", p_style), Paragraph(f"{data['wastage_pct']}%", p_style)],
-        [Paragraph("<b>Ink Used / Pc:</b>", p_style), Paragraph(f"{data['per_pc_used']:.2f} g/pc", p_style), Paragraph("<b>Total Bulk RM Req:</b>", p_style), Paragraph(f"<b>{data['total_bulk_rm_kg']:.2f} kg</b>", p_style)],
-        [Paragraph("<b>Estimated Recipe Cost:</b>", p_style), Paragraph(f"${data['cost_per_kg']:.2f} / kg", p_style), Paragraph("<b>Cost Per Garment:</b>", p_style), Paragraph(f"<b>${data['cost_per_pc']:.4f} / pc</b>", p_style)]
+        [Paragraph("<b>Target Sample Pcs:</b>", p_style), Paragraph(f"{data.get('target_pcs', 0)} pcs", p_style), Paragraph("<b>Order Quantity:</b>", p_style), Paragraph(f"{data.get('order_qty', 0):,} pcs", p_style)],
+        [Paragraph("<b>Batch Size:</b>", p_style), Paragraph(f"{data.get('batch_size', 0)} g", p_style), Paragraph("<b>Wastage Allowance:</b>", p_style), Paragraph(f"{data.get('wastage_pct', 0)}%", p_style)],
+        [Paragraph("<b>Ink Used / Pc:</b>", p_style), Paragraph(f"{float(data.get('per_pc_used', 0)):.2f} g/pc", p_style), Paragraph("<b>Total Bulk RM Req:</b>", p_style), Paragraph(f"<b>{float(data.get('total_bulk_rm_kg', 0)):.2f} kg</b>", p_style)],
+        [Paragraph("<b>Estimated Recipe Cost:</b>", p_style), Paragraph(f"${float(data.get('cost_per_kg', 0)):.2f} / kg", p_style), Paragraph("<b>Cost Per Garment:</b>", p_style), Paragraph(f"<b>${float(data.get('cost_per_pc', 0)):.4f} / pc</b>", p_style)]
     ]
     t_p = Table(p_data, colWidths=[110, 160, 110, 160])
-    t_p.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')), ('PADDING', (0,0), (-1,-1), 3)]))
+    t_p.setStyle(TableStyle([
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')), 
+        ('PADDING', (0,0), (-1,-1), 3)
+    ]))
     elements.append(t_p)
 
     # Formulation Table
@@ -212,7 +229,7 @@ def generate_pdf_report(data):
     ink_headers = ["Role", "Product Name", "Code", "Ratio", "Sample (g)", "Per Pc (g)", "Bulk Req (kg)", "Price/kg", "Total ($)"]
     i_table = [[Paragraph(f"<b>{h}</b>", ParagraphStyle('TH', parent=p_style, textColor=colors.white)) for h in ink_headers]]
     
-    formulation_list = json.loads(data['formulation']) if isinstance(data['formulation'], str) else data['formulation']
+    formulation_list = json.loads(data['formulation']) if isinstance(data.get('formulation'), str) else data.get('formulation', [])
     for row in formulation_list:
         i_table.append([
             Paragraph(str(row.get('Role', '')), p_style),
@@ -226,20 +243,58 @@ def generate_pdf_report(data):
             Paragraph(f"${float(row.get('Line Cost ($)', 0)):.2f}", p_style),
         ])
     t_i = Table(i_table, colWidths=[70, 105, 50, 40, 50, 50, 55, 50, 50])
-    t_i.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1E293B')), ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')), ('PADDING', (0,0), (-1,-1), 3)]))
+    t_i.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1E293B')), 
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')), 
+        ('PADDING', (0,0), (-1,-1), 3)
+    ]))
     elements.append(t_i)
+
+    # Technical Machine Parameters Section
+    elements.append(Paragraph("3. TECHNICAL MACHINE PARAMETERS", sec_style))
+    m_data = [
+        [Paragraph("<b>Mesh Count:</b>", p_style), Paragraph(str(data.get('mesh', '')), p_style), Paragraph("<b>Flash Cure Temp/Time:</b>", p_style), Paragraph(str(data.get('flash_cure', '')), p_style)],
+        [Paragraph("<b>Squeegee Durometer:</b>", p_style), Paragraph(str(data.get('squeegee_duro', '')), p_style), Paragraph("<b>Main Curing Temp:</b>", p_style), Paragraph(str(data.get('main_cure', '')), p_style)],
+        [Paragraph("<b>Squeegee Angle/Speed:</b>", p_style), Paragraph(str(data.get('squeegee_angle', '')), p_style), Paragraph("<b>Drying Belt Speed:</b>", p_style), Paragraph(str(data.get('belt_speed', '')), p_style)],
+        [Paragraph("<b>Off-Contact Distance:</b>", p_style), Paragraph(str(data.get('off_contact', '')), p_style), Paragraph("<b>Number of Passes:</b>", p_style), Paragraph(str(data.get('passes', '')), p_style)],
+    ]
+    t_m = Table(m_data, colWidths=[110, 160, 110, 160])
+    t_m.setStyle(TableStyle([
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')), 
+        ('PADDING', (0,0), (-1,-1), 3)
+    ]))
+    elements.append(t_m)
     
     # Sign-off Table
-    elements.append(Paragraph("3. TECHNICAL APPROVAL", sec_style))
+    elements.append(Paragraph("4. TECHNICAL APPROVAL", sec_style))
     s_data = [
-        [Paragraph("<b>R&D Exec:</b>", p_style), Paragraph(str(data['sig_rd']), p_style), Paragraph("<b>Quality Dept:</b>", p_style), Paragraph(str(data['sig_qa']), p_style)],
-        [Paragraph("<b>Sample Dev:</b>", p_style), Paragraph(str(data['sig_sample']), p_style), Paragraph("<b>Production Mgr:</b>", p_style), Paragraph(str(data['sig_prod']), p_style)],
+        [Paragraph("<b>R&D Exec:</b>", p_style), Paragraph(str(data.get('sig_rd', '')), p_style), Paragraph("<b>Quality Dept:</b>", p_style), Paragraph(str(data.get('sig_qa', '')), p_style)],
+        [Paragraph("<b>Sample Dev:</b>", p_style), Paragraph(str(data.get('sig_sample', '')), p_style), Paragraph("<b>Production Mgr:</b>", p_style), Paragraph(str(data.get('sig_prod', '')), p_style)],
     ]
     t_s = Table(s_data, colWidths=[90, 185, 90, 185])
-    t_s.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F8FAFC')), ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')), ('PADDING', (0,0), (-1,-1), 3)]))
+    t_s.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F8FAFC')), 
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')), 
+        ('PADDING', (0,0), (-1,-1), 3)
+    ]))
     elements.append(t_s)
 
-    doc.build(elements)
+    # Footer Callback Function for Created By & Developed By Labels
+    created_by_text = str(data.get('created_by', '')).strip().lower()
+    left_footer = f"created by {created_by_text}" if created_by_text else "created by unknown"
+    right_footer = "Developed by - Lab Executive - Lakshan Vimukthi"
+
+    def draw_footer(canvas, pdf_doc):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 7)
+        canvas.setFillColor(colors.HexColor('#64748B'))
+        # Bottom-Left: Small letters creator name
+        canvas.drawString(25, 15, left_footer)
+        # Bottom-Right: Small words Developed by - Lab Executive - Lakshan Vimukthi
+        canvas.drawRightString(pdf_doc.pagesize[0] - 25, 15, right_footer)
+        canvas.restoreState()
+
+    doc.build(elements, onFirstPage=draw_footer, onLaterPages=draw_footer)
     buffer.seek(0)
     return buffer.getvalue()
 
