@@ -74,7 +74,6 @@ def load_saved_recipes():
 # Helper Function: Save New Recipe to Excel
 def save_recipe_to_excel(recipe_data):
     try:
-        # Convert formulation list/dict into JSON string for flat Excel storage
         data_to_save = recipe_data.copy()
         data_to_save['formulation'] = json.dumps(recipe_data['formulation'])
 
@@ -98,6 +97,19 @@ def save_recipe_to_excel(recipe_data):
         return True
     except Exception as e:
         st.error(f"Failed to save recipe to Excel: {e}")
+        return False
+
+# Helper Function: Delete a Specific Recipe from Excel
+def delete_recipe_from_excel(recipe_id_to_delete):
+    try:
+        df_recipes = load_saved_recipes()
+        if not df_recipes.empty:
+            df_updated = df_recipes[df_recipes['recipe_id'] != recipe_id_to_delete].reset_index(drop=True)
+            with pd.ExcelWriter(EXCEL_FILE, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+                df_updated.to_excel(writer, sheet_name=RECIPE_LOG_SHEET, index=False)
+            return True
+    except Exception as e:
+        st.error(f"Failed to delete recipe: {e}")
         return False
 
 # Helper Function: Generate Automatic Recipe ID
@@ -235,7 +247,6 @@ def generate_pdf_report(data):
     ink_headers = ["Component Role", "Chemical / Ink Product Name", "Code", "Ratio (%)", "Use Qty (g)", "Mixing Notes"]
     i_table = [[Paragraph(f"<b>{h}</b>", ParagraphStyle('TH', parent=p_style, textColor=colors.white)) for h in ink_headers]]
     
-    # Check if formulation is string (JSON) or list of dicts
     formulation_list = data['formulation']
     if isinstance(formulation_list, str):
         formulation_list = json.loads(formulation_list)
@@ -287,7 +298,6 @@ def generate_pdf_report(data):
     elements.append(t_s)
     elements.append(Spacer(1, 10))
 
-    # PDF Bottom Signatures
     footer_table_data = [
         [
             Paragraph(f"Created by: {data['created_by']}", created_by_style),
@@ -325,7 +335,6 @@ menu = st.sidebar.radio(
 if menu == "🎨 Technical Recipe Builder & Report Generator":
     st.header("1. Job Header & Substrate Specifications")
     
-    # AUTOMATICALLY INCREMENTED RECIPE ID (DISABLED FOR MANUAL INPUT)
     auto_recipe_id = get_next_recipe_id()
 
     col1, col2 = st.columns(2)
@@ -476,7 +485,7 @@ elif menu == "📖 View & Search Saved Recipes":
         st.dataframe(df_recipes[['recipe_id', 'date', 'style_name', 'print_tech', 'created_by', 'revision', 'fabric_comp']], use_container_width=True)
         
         st.divider()
-        st.subheader("🔍 Select Recipe to Inspect / Print PDF")
+        st.subheader("🔍 Select Recipe to Inspect, Print PDF, or Delete")
         
         recipe_options = df_recipes['recipe_id'].tolist()
         selected_id = st.selectbox("Select Recipe ID", options=recipe_options)
@@ -497,13 +506,28 @@ elif menu == "📖 View & Search Saved Recipes":
             form_data = json.loads(recipe_row['formulation']) if isinstance(recipe_row['formulation'], str) else recipe_row['formulation']
             st.dataframe(pd.DataFrame(form_data), use_container_width=True)
 
-            pdf_bytes = generate_pdf_report(recipe_row)
-            st.download_button(
-                label=f"💾 Re-Download PDF for {recipe_row['recipe_id']}",
-                data=pdf_bytes,
-                file_name=f"Recipe_Report_{recipe_row['recipe_id']}.pdf",
-                mime="application/pdf"
-            )
+            action_col1, action_col2 = st.columns(2)
+            
+            with action_col1:
+                pdf_bytes = generate_pdf_report(recipe_row)
+                st.download_button(
+                    label=f"📄 Download PDF for {recipe_row['recipe_id']}",
+                    data=pdf_bytes,
+                    file_name=f"Recipe_Report_{recipe_row['recipe_id']}.pdf",
+                    mime="application/pdf"
+                )
+
+            # DELETE RECIPE ACTION WITH SAFETY CHECK
+            with action_col2:
+                with st.expander("🗑️ Delete Recipe Option"):
+                    confirm_delete = st.checkbox(f"Confirm permanent deletion of {selected_id}?")
+                    if st.button(f"Permanently Delete {selected_id}", type="primary"):
+                        if confirm_delete:
+                            if delete_recipe_from_excel(selected_id):
+                                st.success(f"Deleted {selected_id} successfully!")
+                                st.rerun()
+                        else:
+                            st.warning("Please check the confirmation box first before deleting.")
 
 elif menu == "📚 Chemical & Ink Library Manager":
     st.header("📚 Chemical & Advanced Ink Library")
