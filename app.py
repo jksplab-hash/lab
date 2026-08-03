@@ -10,22 +10,22 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
 
-st.set_page_config(page_title="Screen Printing Portal", layout="wide", page_icon="🎨")
+st.set_page_config(page_title="Screen Printing R&D Portal", layout="wide", page_icon="🎨")
 
 EXCEL_FILE = "Screen_Printing_RND_Technical_Library_Workbook.xlsx"
 INK_LIBRARY_SHEET = "Chemical Ink Library"
 RECIPE_LOG_SHEET = "Saved Technical Recipes"
 
-# Initial Default Data (used only if Excel sheet doesn't exist yet)
+# Initial Default Data with Unit Prices ($/kg)
 INITIAL_INK_LIBRARY = [
-    {"Product Name": "Silicone Base Clear", "Supplier Code": "SIL-BASE-90", "Role": "Base Transparent", "Notes": "High elasticity silicone base"},
-    {"Product Name": "Silicone White Undercoat", "Supplier Code": "SIL-WHT-10", "Role": "Base Opaque / White", "Notes": "Provides opacity & bleed barrier"},
-    {"Product Name": "High Fastness Black Pigment", "Supplier Code": "PIG-BLK-05", "Role": "Pigment Colorant", "Notes": "Color shade matching"},
-    {"Product Name": "High Fastness Red Pigment", "Supplier Code": "PIG-RED-02", "Role": "Pigment Colorant", "Notes": "Vibrant red shade matching"},
-    {"Product Name": "Silicone Platinum Catalyst", "Supplier Code": "CAT-SIL-02", "Role": "Catalyst / Hardener", "Notes": "Mix thoroughly before printing"},
-    {"Product Name": "Anti-Fading Crosslinker", "Supplier Code": "XL-MOD-01", "Role": "Crosslinker / Fixer", "Notes": "Enhances wash fastness (20+ cycles)"},
-    {"Product Name": "Water-Based Elastic Clear Base", "Supplier Code": "WB-BASE-01", "Role": "Base Transparent", "Notes": "Eco-friendly soft hand base"},
-    {"Product Name": "Plastisol High-Opacity White", "Supplier Code": "PL-WHT-99", "Role": "Base Opaque / White", "Notes": "Heavy coverage underbase"}
+    {"Product Name": "Silicone Base Clear", "Supplier Code": "SIL-BASE-90", "Role": "Base Transparent", "Unit Price ($/kg)": 14.50, "Notes": "High elasticity silicone base"},
+    {"Product Name": "Silicone White Undercoat", "Supplier Code": "SIL-WHT-10", "Role": "Base Opaque / White", "Unit Price ($/kg)": 12.00, "Notes": "Provides opacity & bleed barrier"},
+    {"Product Name": "High Fastness Black Pigment", "Supplier Code": "PIG-BLK-05", "Role": "Pigment Colorant", "Unit Price ($/kg)": 18.00, "Notes": "Color shade matching"},
+    {"Product Name": "High Fastness Red Pigment", "Supplier Code": "PIG-RED-02", "Role": "Pigment Colorant", "Unit Price ($/kg)": 22.00, "Notes": "Vibrant red shade matching"},
+    {"Product Name": "Silicone Platinum Catalyst", "Supplier Code": "CAT-SIL-02", "Role": "Catalyst / Hardener", "Unit Price ($/kg)": 45.00, "Notes": "Mix thoroughly before printing"},
+    {"Product Name": "Anti-Fading Crosslinker", "Supplier Code": "XL-MOD-01", "Role": "Crosslinker / Fixer", "Unit Price ($/kg)": 28.00, "Notes": "Enhances wash fastness (20+ cycles)"},
+    {"Product Name": "Water-Based Elastic Clear Base", "Supplier Code": "WB-BASE-01", "Role": "Base Transparent", "Unit Price ($/kg)": 6.50, "Notes": "Eco-friendly soft hand base"},
+    {"Product Name": "Plastisol High-Opacity White", "Supplier Code": "PL-WHT-99", "Role": "Base Opaque / White", "Unit Price ($/kg)": 8.00, "Notes": "Heavy coverage underbase"}
 ]
 
 # Helper Function: Load Persistent Ink Library from Excel
@@ -36,11 +36,12 @@ def load_ink_library():
             if INK_LIBRARY_SHEET in xls.sheet_names:
                 df = pd.read_excel(xls, INK_LIBRARY_SHEET)
                 if not df.empty:
+                    if "Unit Price ($/kg)" not in df.columns:
+                        df["Unit Price ($/kg)"] = 10.0
                     return df
         except Exception as e:
             st.error(f"Error loading chemical library: {e}")
     
-    # Fallback to initial library and save to file
     df_default = pd.DataFrame(INITIAL_INK_LIBRARY)
     save_ink_library_to_excel(df_default)
     return df_default
@@ -65,8 +66,7 @@ def load_saved_recipes():
         try:
             xls = pd.ExcelFile(EXCEL_FILE)
             if RECIPE_LOG_SHEET in xls.sheet_names:
-                df = pd.read_excel(xls, RECIPE_LOG_SHEET)
-                return df
+                return pd.read_excel(xls, RECIPE_LOG_SHEET)
         except Exception as e:
             st.error(f"Error loading recipes: {e}")
     return pd.DataFrame()
@@ -87,10 +87,7 @@ def save_recipe_to_excel(recipe_data):
         else:
             df_existing = load_saved_recipes()
             new_row = pd.DataFrame([data_to_save])
-            if not df_existing.empty:
-                df_updated = pd.concat([df_existing, new_row], ignore_index=True)
-            else:
-                df_updated = new_row
+            df_updated = pd.concat([df_existing, new_row], ignore_index=True) if not df_existing.empty else new_row
             
             with pd.ExcelWriter(EXCEL_FILE, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
                 df_updated.to_excel(writer, sheet_name=RECIPE_LOG_SHEET, index=False)
@@ -118,9 +115,7 @@ def get_next_recipe_id():
     year = datetime.now().year
     if df_recipes.empty:
         return f"RND-REC-{year}-001"
-    
-    count = len(df_recipes) + 1
-    return f"RND-REC-{year}-{count:03d}"
+    return f"RND-REC-{year}-{len(df_recipes) + 1:03d}"
 
 # Initialize Session State
 if "ink_library" not in st.session_state:
@@ -128,11 +123,11 @@ if "ink_library" not in st.session_state:
 
 if "formulation_df" not in st.session_state:
     st.session_state.formulation_df = pd.DataFrame([
-        {"Delete": False, "Role": "Base Transparent", "Product Name": "Silicone Base Clear", "Code": "SIL-BASE-90", "Percentage (%)": 70.0, "Mixing Notes": "High elasticity base"},
-        {"Delete": False, "Role": "Base Opaque / White", "Product Name": "Silicone White Undercoat", "Code": "SIL-WHT-10", "Percentage (%)": 20.0, "Mixing Notes": "Provides opacity & bleed barrier"},
-        {"Delete": False, "Role": "Pigment Colorant", "Product Name": "High Fastness Black Pigment", "Code": "PIG-BLK-05", "Percentage (%)": 5.0, "Mixing Notes": "Color shade matching"},
-        {"Delete": False, "Role": "Catalyst / Hardener", "Product Name": "Silicone Platinum Catalyst", "Code": "CAT-SIL-02", "Percentage (%)": 2.0, "Mixing Notes": "Mix thoroughly before printing"},
-        {"Delete": False, "Role": "Crosslinker / Fixer", "Product Name": "Anti-Fading Crosslinker", "Code": "XL-MOD-01", "Percentage (%)": 3.0, "Mixing Notes": "Enhances wash fastness (20+ cycles)"}
+        {"Delete": False, "Role": "Base Transparent", "Product Name": "Silicone Base Clear", "Code": "SIL-BASE-90", "Percentage (%)": 70.0, "Unit Price ($/kg)": 14.50, "Mixing Notes": "High elasticity base"},
+        {"Delete": False, "Role": "Base Opaque / White", "Product Name": "Silicone White Undercoat", "Code": "SIL-WHT-10", "Percentage (%)": 20.0, "Unit Price ($/kg)": 12.00, "Mixing Notes": "Provides opacity & bleed barrier"},
+        {"Delete": False, "Role": "Pigment Colorant", "Product Name": "High Fastness Black Pigment", "Code": "PIG-BLK-05", "Percentage (%)": 5.0, "Unit Price ($/kg)": 18.00, "Mixing Notes": "Color shade matching"},
+        {"Delete": False, "Role": "Catalyst / Hardener", "Product Name": "Silicone Platinum Catalyst", "Code": "CAT-SIL-02", "Percentage (%)": 2.0, "Unit Price ($/kg)": 45.00, "Mixing Notes": "Mix thoroughly before printing"},
+        {"Delete": False, "Role": "Crosslinker / Fixer", "Product Name": "Anti-Fading Crosslinker", "Code": "XL-MOD-01", "Percentage (%)": 3.0, "Unit Price ($/kg)": 28.00, "Mixing Notes": "Enhances wash fastness (20+ cycles)"}
     ])
 
 # Helper Function: Load Master Logs
@@ -160,10 +155,8 @@ def save_trial_to_excel(trial_data):
             ws.append(["Trial ID", "Date", "Style / Reference", "Technique", "Fabric Type", "Objective", "Recipe Variation", "Wash Result", "Crocking Result", "Status"])
         else:
             wb = openpyxl.load_workbook(EXCEL_FILE)
-            if "R&D Master Trial Log" in wb.sheetnames:
-                ws = wb["R&D Master Trial Log"]
-            else:
-                ws = wb.create_sheet("R&D Master Trial Log")
+            ws = wb["R&D Master Trial Log"] if "R&D Master Trial Log" in wb.sheetnames else wb.create_sheet("R&D Master Trial Log")
+            if ws.max_row == 1:
                 ws.append([])
                 ws.append([])
                 ws.append(["Trial ID", "Date", "Style / Reference", "Technique", "Fabric Type", "Objective", "Recipe Variation", "Wash Result", "Crocking Result", "Status"])
@@ -175,82 +168,51 @@ def save_trial_to_excel(trial_data):
         st.error(f"Failed to save to Excel file: {e}")
         return False
 
-trials_df, matrix_df = load_data()
-
 # PDF Generator Function
 def generate_pdf_report(data):
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
     styles = getSampleStyleSheet()
     
-    title_style = ParagraphStyle(
-        'HeaderTitle', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=15, leading=18,
-        textColor=colors.HexColor('#1E293B'), alignment=1
-    )
-    subtitle_style = ParagraphStyle(
-        'HeaderSub', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, leading=13,
-        textColor=colors.HexColor('#2563EB'), alignment=1
-    )
-    sec_style = ParagraphStyle(
-        'SecTitle', parent=styles['Heading2'], fontName='Helvetica-Bold', fontSize=11, leading=14,
-        textColor=colors.HexColor('#2563EB'), spaceBefore=8, spaceAfter=4
-    )
-    p_style = ParagraphStyle(
-        'BodyCustom', parent=styles['Normal'], fontName='Helvetica', fontSize=8.5, leading=11
-    )
-    created_by_style = ParagraphStyle(
-        'CreatedBySig', parent=styles['Normal'], fontName='Helvetica-Oblique', fontSize=7.5, leading=10,
-        textColor=colors.HexColor('#64748B'), alignment=0
-    )
-    creator_style = ParagraphStyle(
-        'CreatorSig', parent=styles['Normal'], fontName='Helvetica-Oblique', fontSize=7.5, leading=10,
-        textColor=colors.HexColor('#64748B'), alignment=2
-    )
-
+    title_style = ParagraphStyle('HeaderTitle', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=14, leading=16, textColor=colors.HexColor('#1E293B'), alignment=1)
+    subtitle_style = ParagraphStyle('HeaderSub', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, leading=11, textColor=colors.HexColor('#2563EB'), alignment=1)
+    sec_style = ParagraphStyle('SecTitle', parent=styles['Heading2'], fontName='Helvetica-Bold', fontSize=10, leading=12, textColor=colors.HexColor('#2563EB'), spaceBefore=6, spaceAfter=3)
+    p_style = ParagraphStyle('BodyCustom', parent=styles['Normal'], fontName='Helvetica', fontSize=8, leading=10)
+    
     elements = []
-    
     elements.append(Paragraph("JK GARMENT SCREEN PRINTING R&D", title_style))
-    elements.append(Paragraph("ADVANCED TECHNICAL RECIPE SPECIFICATION REPORT", subtitle_style))
-    elements.append(Spacer(1, 6))
-    elements.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#2563EB'), spaceAfter=8))
+    elements.append(Paragraph("TECHNICAL RECIPE & PRODUCTION REQUIREMENT REPORT", subtitle_style))
+    elements.append(Spacer(1, 4))
+    elements.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#2563EB'), spaceAfter=6))
     
-    # 1. Job Header
+    # Header Info
     h_data = [
         [Paragraph("<b>Recipe ID:</b>", p_style), Paragraph(str(data['recipe_id']), p_style), Paragraph("<b>Date:</b>", p_style), Paragraph(str(data['date']), p_style)],
-        [Paragraph("<b>Style Name/No:</b>", p_style), Paragraph(str(data['style_name']), p_style), Paragraph("<b>Print Technique:</b>", p_style), Paragraph(str(data['print_tech']), p_style)],
-        [Paragraph("<b>Created by:</b>", p_style), Paragraph(str(data['created_by']), p_style), Paragraph("<b>Revision No:</b>", p_style), Paragraph(str(data['revision']), p_style)],
+        [Paragraph("<b>Style Name/No:</b>", p_style), Paragraph(str(data['style_name']), p_style), Paragraph("<b>Print Tech:</b>", p_style), Paragraph(str(data['print_tech']), p_style)],
+        [Paragraph("<b>Created by:</b>", p_style), Paragraph(str(data['created_by']), p_style), Paragraph("<b>Revision:</b>", p_style), Paragraph(str(data['revision']), p_style)],
     ]
-    t_h = Table(h_data, colWidths=[95, 170, 95, 170])
-    t_h.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F8FAFC')),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')),
-        ('PADDING', (0,0), (-1,-1), 4),
-    ]))
+    t_h = Table(h_data, colWidths=[90, 180, 90, 180])
+    t_h.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F8FAFC')), ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')), ('PADDING', (0,0), (-1,-1), 3)]))
     elements.append(t_h)
     
-    # 2. Fabric Spec
-    elements.append(Paragraph("1. SUBSTRATE & FABRIC SPECIFICATIONS", sec_style))
-    f_data = [
-        [Paragraph("<b>Fabric Composition:</b>", p_style), Paragraph(str(data['fabric_comp']), p_style), Paragraph("<b>Fabric Color / CW:</b>", p_style), Paragraph(str(data['fabric_color']), p_style)],
-        [Paragraph("<b>Fabric Construction:</b>", p_style), Paragraph(str(data['fabric_const']), p_style), Paragraph("<b>GSM:</b>", p_style), Paragraph(str(data['gsm']), p_style)],
-        [Paragraph("<b>Dye Migration Risk:</b>", p_style), Paragraph(str(data['dye_risk']), p_style), Paragraph("<b>Undercoat Required:</b>", p_style), Paragraph(str(data['undercoat']), p_style)],
+    # Bulk Production & Cost Planning
+    elements.append(Paragraph("1. BULK PRODUCTION & MATERIAL PLANNING (RM REQUIREMENT)", sec_style))
+    p_data = [
+        [Paragraph("<b>Target Sample Pcs:</b>", p_style), Paragraph(f"{data['target_pcs']} pcs", p_style), Paragraph("<b>Order Quantity:</b>", p_style), Paragraph(f"{data['order_qty']:,} pcs", p_style)],
+        [Paragraph("<b>Batch Size:</b>", p_style), Paragraph(f"{data['batch_size']} g", p_style), Paragraph("<b>Wastage Allowance:</b>", p_style), Paragraph(f"{data['wastage_pct']}%", p_style)],
+        [Paragraph("<b>Ink Used / Pc:</b>", p_style), Paragraph(f"{data['per_pc_used']:.2f} g/pc", p_style), Paragraph("<b>Total Bulk RM Req:</b>", p_style), Paragraph(f"<b>{data['total_bulk_rm_kg']:.2f} kg</b>", p_style)],
+        [Paragraph("<b>Estimated Recipe Cost:</b>", p_style), Paragraph(f"${data['cost_per_kg']:.2f} / kg", p_style), Paragraph("<b>Cost Per Garment:</b>", p_style), Paragraph(f"<b>${data['cost_per_pc']:.4f} / pc</b>", p_style)]
     ]
-    t_f = Table(f_data, colWidths=[110, 155, 110, 155])
-    t_f.setStyle(TableStyle([
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')),
-        ('PADDING', (0,0), (-1,-1), 4),
-    ]))
-    elements.append(t_f)
-    
-    # 3. Ink Formulation
-    elements.append(Paragraph(f"2. INK FORMULATION & CHEMICAL RECIPE (Target Batch: {data['batch_size']} g)", sec_style))
-    ink_headers = ["Component Role", "Chemical / Ink Product Name", "Code", "Ratio (%)", "Use Qty (g)", "Mixing Notes"]
+    t_p = Table(p_data, colWidths=[110, 160, 110, 160])
+    t_p.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')), ('PADDING', (0,0), (-1,-1), 3)]))
+    elements.append(t_p)
+
+    # Formulation Table
+    elements.append(Paragraph("2. INK FORMULATION & BOM COST BREAKDOWN", sec_style))
+    ink_headers = ["Role", "Product Name", "Code", "Ratio", "Sample (g)", "Per Pc (g)", "Bulk Req (kg)", "Price/kg", "Total ($)"]
     i_table = [[Paragraph(f"<b>{h}</b>", ParagraphStyle('TH', parent=p_style, textColor=colors.white)) for h in ink_headers]]
     
-    formulation_list = data['formulation']
-    if isinstance(formulation_list, str):
-        formulation_list = json.loads(formulation_list)
-
+    formulation_list = json.loads(data['formulation']) if isinstance(data['formulation'], str) else data['formulation']
     for row in formulation_list:
         i_table.append([
             Paragraph(str(row.get('Role', '')), p_style),
@@ -258,67 +220,30 @@ def generate_pdf_report(data):
             Paragraph(str(row.get('Code', '')), p_style),
             Paragraph(f"{float(row.get('Percentage (%)', 0)):.1f}%", p_style),
             Paragraph(f"{float(row.get('Use Quantity (g)', 0)):.1f}g", p_style),
-            Paragraph(str(row.get('Mixing Notes', '')), p_style),
+            Paragraph(f"{float(row.get('Per 1 Used (g)', 0)):.2f}g", p_style),
+            Paragraph(f"{float(row.get('Bulk Req (kg)', 0)):.2f}kg", p_style),
+            Paragraph(f"${float(row.get('Unit Price ($/kg)', 0)):.2f}", p_style),
+            Paragraph(f"${float(row.get('Line Cost ($)', 0)):.2f}", p_style),
         ])
-    t_i = Table(i_table, colWidths=[90, 130, 60, 50, 55, 145])
-    t_i.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1E293B')),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')),
-        ('PADDING', (0,0), (-1,-1), 4),
-    ]))
+    t_i = Table(i_table, colWidths=[70, 105, 50, 40, 50, 50, 55, 50, 50])
+    t_i.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1E293B')), ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')), ('PADDING', (0,0), (-1,-1), 3)]))
     elements.append(t_i)
     
-    # 4. Technical Machine Parameters
-    elements.append(Paragraph("3. TECHNICAL PRINTING & MACHINE SETUP PARAMETERS", sec_style))
-    m_data = [
-        [Paragraph("<b>Mesh Count:</b>", p_style), Paragraph(str(data['mesh']), p_style), Paragraph("<b>Flash Cure Temp / Time:</b>", p_style), Paragraph(str(data['flash_cure']), p_style)],
-        [Paragraph("<b>Squeegee Durometer:</b>", p_style), Paragraph(str(data['squeegee_duro']), p_style), Paragraph("<b>Main Curing Temp:</b>", p_style), Paragraph(str(data['main_cure']), p_style)],
-        [Paragraph("<b>Squeegee Angle/Speed:</b>", p_style), Paragraph(str(data['squeegee_angle']), p_style), Paragraph("<b>Drying Belt Speed/Time:</b>", p_style), Paragraph(str(data['belt_speed']), p_style)],
-        [Paragraph("<b>Off-Contact Distance:</b>", p_style), Paragraph(str(data['off_contact']), p_style), Paragraph("<b>Number of Passes:</b>", p_style), Paragraph(str(data['passes']), p_style)],
-    ]
-    t_m = Table(m_data, colWidths=[110, 155, 110, 155])
-    t_m.setStyle(TableStyle([
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')),
-        ('PADDING', (0,0), (-1,-1), 4),
-    ]))
-    elements.append(t_m)
-
-    # 5. Sign-off
-    elements.append(Paragraph("4. TECHNICAL APPROVAL & SIGN-OFF", sec_style))
+    # Sign-off Table
+    elements.append(Paragraph("3. TECHNICAL APPROVAL", sec_style))
     s_data = [
         [Paragraph("<b>R&D Exec:</b>", p_style), Paragraph(str(data['sig_rd']), p_style), Paragraph("<b>Quality Dept:</b>", p_style), Paragraph(str(data['sig_qa']), p_style)],
-        [Paragraph("<b>Sample Dev Head:</b>", p_style), Paragraph(str(data['sig_sample']), p_style), Paragraph("<b>Production Manager:</b>", p_style), Paragraph(str(data['sig_prod']), p_style)],
+        [Paragraph("<b>Sample Dev:</b>", p_style), Paragraph(str(data['sig_sample']), p_style), Paragraph("<b>Production Mgr:</b>", p_style), Paragraph(str(data['sig_prod']), p_style)],
     ]
-    t_s = Table(s_data, colWidths=[100, 165, 100, 165])
-    t_s.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F8FAFC')),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')),
-        ('PADDING', (0,0), (-1,-1), 4),
-    ]))
+    t_s = Table(s_data, colWidths=[90, 185, 90, 185])
+    t_s.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F8FAFC')), ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')), ('PADDING', (0,0), (-1,-1), 3)]))
     elements.append(t_s)
-    elements.append(Spacer(1, 10))
-
-    footer_table_data = [
-        [
-            Paragraph(f"Created by: {data['created_by']}", created_by_style),
-            Paragraph("Developed by: Lab Executive - Lakshan Vimukthi", creator_style)
-        ]
-    ]
-    t_footer = Table(footer_table_data, colWidths=[265, 265])
-    t_footer.setStyle(TableStyle([
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 0),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-        ('TOPPADDING', (0, 0), (-1, -1), 0),
-    ]))
-    elements.append(t_footer)
 
     doc.build(elements)
     buffer.seek(0)
     return buffer.getvalue()
 
-st.title("🎨 Screen Printing R&D - Technical Portal")
+st.title("🎨 Screen Printing R&D & Costing Portal")
 
 menu = st.sidebar.radio(
     "Select Action", 
@@ -334,7 +259,6 @@ menu = st.sidebar.radio(
 
 if menu == "🎨 Technical Recipe Builder & Report Generator":
     st.header("1. Job Header & Substrate Specifications")
-    
     auto_recipe_id = get_next_recipe_id()
 
     col1, col2 = st.columns(2)
@@ -352,33 +276,49 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
         revision = st.text_input("Revision No", value="v2.1", placeholder="e.g. v1.0, v2.1")
         fabric_color = st.text_input("Fabric Color / CW", value="", placeholder="e.g. Charcoal Dark Grey")
         gsm = st.text_input("GSM", value="", placeholder="e.g. 180 GSM, 220 GSM")
-        undercoat = st.text_input("Undercoat Required", value="Yes (Anti-Bleed Barrier)", placeholder="e.g. Yes (Anti-Bleed Barrier)")
+        undercoat = st.selectbox("Undercoat Required", ["Yes", "No"], index=1)
 
     st.divider()
-    st.header("2. Ink Formulation & Chemical Recipe")
+    st.header("2. Production Metrics & Material Requirement Planning (RM)")
     
-    batch_size = st.number_input("Target Batch Size (Grams)", value=1000.0, step=100.0, min_value=0.0)
-    
-    available_products = sorted(st.session_state.ink_library["Product Name"].dropna().tolist())
-    if not available_products:
-        available_products = [""]
+    prod_col1, prod_col2, prod_col3, prod_col4 = st.columns(4)
+    with prod_col1:
+        batch_size = st.number_input("Sample Batch Size (Grams)", value=1000.0, step=50.0, min_value=1.0)
+    with prod_col2:
+        target_pcs = st.number_input("Target Printed Pcs (From Batch)", value=50, step=5, min_value=1)
+    with prod_col3:
+        order_qty = st.number_input("Bulk Order Qty (Garments)", value=5000, step=500, min_value=1)
+    with prod_col4:
+        wastage_pct = st.number_input("Wastage Allowance (%)", value=10.0, step=1.0, min_value=0.0)
 
-    code_map = dict(zip(st.session_state.ink_library["Product Name"], st.session_state.ink_library["Supplier Code"]))
+    # Derived production values
+    per_pc_used = batch_size / target_pcs  # Grams per garment printed
+    wastage_factor = 1.0 + (wastage_pct / 100.0)
+    total_bulk_rm_kg = (order_qty * per_pc_used * wastage_factor) / 1000.0
 
-    def sync_codes(df):
-        for idx, row in df.iterrows():
-            p_name = row.get("Product Name")
-            if p_name in code_map:
-                df.at[idx, "Code"] = code_map[p_name]
-        return df
+    st.info(f"💡 **Calculated Ink/Garment:** `{per_pc_used:.2f} g/pc` | **Total Bulk Ink Requirement (incl. {wastage_pct}% Wastage):** `{total_bulk_rm_kg:.2f} kg`")
 
-    st.session_state.formulation_df = sync_codes(st.session_state.formulation_df)
+    st.divider()
+    st.header("3. Chemical Recipe Formulation & Costing")
 
-    st.session_state.formulation_df["Percentage (%)"] = pd.to_numeric(st.session_state.formulation_df["Percentage (%)"], errors="coerce").fillna(0.0)
-    st.session_state.formulation_df["Use Quantity (g)"] = (st.session_state.formulation_df["Percentage (%)"] / 100.0) * batch_size
+    # Sync price and code mappings from master library
+    ink_lib = st.session_state.ink_library
+    code_map = dict(zip(ink_lib["Product Name"], ink_lib["Supplier Code"]))
+    price_map = dict(zip(ink_lib["Product Name"], ink_lib["Unit Price ($/kg)"]))
+    available_products = sorted(ink_lib["Product Name"].dropna().tolist()) or [""]
 
-    column_order = ["Delete", "Role", "Product Name", "Code", "Percentage (%)", "Use Quantity (g)", "Mixing Notes"]
-    display_df = st.session_state.formulation_df.reindex(columns=column_order)
+    form_df = st.session_state.formulation_df.copy()
+
+    # Synchronize codes & prices
+    for idx, row in form_df.iterrows():
+        pname = row.get("Product Name")
+        if pname in code_map:
+            form_df.at[idx, "Code"] = code_map[pname]
+        if pname in price_map and (pd.isna(row.get("Unit Price ($/kg)")) or row.get("Unit Price ($/kg)") == 0):
+            form_df.at[idx, "Unit Price ($/kg)"] = price_map[pname]
+
+    column_order = ["Delete", "Role", "Product Name", "Code", "Percentage (%)", "Unit Price ($/kg)", "Mixing Notes"]
+    display_df = form_df.reindex(columns=column_order)
 
     edited_df = st.data_editor(
         display_df,
@@ -389,35 +329,58 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
             "Product Name": st.column_config.SelectboxColumn("Product Name", options=available_products, required=True),
             "Code": st.column_config.TextColumn("Code", disabled=True),
             "Percentage (%)": st.column_config.NumberColumn("Ratio (%)", min_value=0.0, max_value=100.0, step=0.5, format="%.1f%%"),
-            "Use Quantity (g)": st.column_config.NumberColumn("Use Quantity (g)", disabled=True, format="%.1f g"),
+            "Unit Price ($/kg)": st.column_config.NumberColumn("Unit Price ($/kg)", min_value=0.0, step=0.50, format="$%.2f"),
             "Mixing Notes": st.column_config.TextColumn("Mixing Notes")
         },
         use_container_width=True,
         key="formulation_editor"
     )
 
-    edited_df = sync_codes(edited_df)
     st.session_state.formulation_df = edited_df
 
     if st.button("🗑️ Delete Selected Rows"):
         if "Delete" in edited_df.columns:
-            filtered_df = edited_df[edited_df["Delete"] == False].reset_index(drop=True)
-            st.session_state.formulation_df = filtered_df
+            st.session_state.formulation_df = edited_df[edited_df["Delete"] == False].reset_index(drop=True)
             st.rerun()
 
+    # Dynamic Calculations
     calc_df = st.session_state.formulation_df.copy()
     calc_df["Percentage (%)"] = pd.to_numeric(calc_df["Percentage (%)"], errors="coerce").fillna(0.0)
+    calc_df["Unit Price ($/kg)"] = pd.to_numeric(calc_df["Unit Price ($/kg)"], errors="coerce").fillna(0.0)
+
     calc_df["Use Quantity (g)"] = (calc_df["Percentage (%)"] / 100.0) * batch_size
-    
+    calc_df["Per 1 Used (g)"] = (calc_df["Percentage (%)"] / 100.0) * per_pc_used
+    calc_df["Bulk Req (kg)"] = (calc_df["Percentage (%)"] / 100.0) * total_bulk_rm_kg
+    calc_df["Line Cost ($)"] = calc_df["Bulk Req (kg)"] * calc_df["Unit Price ($/kg)"]
+
     total_pct = calc_df["Percentage (%)"].sum()
-    total_weight = calc_df["Use Quantity (g)"].sum()
-    
-    m_col1, m_col2 = st.columns(2)
-    m_col1.metric("Total Ratio (%)", f"{total_pct:.1f}%")
-    m_col2.metric("Total Use Quantity (g)", f"{total_weight:.1f} g")
+    total_batch_weight = calc_df["Use Quantity (g)"].sum()
+    total_cost_usd = calc_df["Line Cost ($)"].sum()
+    cost_per_kg = (total_cost_usd / total_bulk_rm_kg) if total_bulk_rm_kg > 0 else 0.0
+    cost_per_pc = total_cost_usd / order_qty if order_qty > 0 else 0.0
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Total Formulation Ratio", f"{total_pct:.1f}%")
+    m2.metric("Total Batch Weight", f"{total_batch_weight:.1f} g")
+    m3.metric("Cost per kg of Ink", f"${cost_per_kg:.2f} / kg")
+    m4.metric("Print Cost per Garment", f"${cost_per_pc:.4f} / pc")
+
+    st.subheader("Calculated Requirement & Costing Preview")
+    st.dataframe(
+        calc_df[["Role", "Product Name", "Code", "Percentage (%)", "Use Quantity (g)", "Per 1 Used (g)", "Bulk Req (kg)", "Unit Price ($/kg)", "Line Cost ($)"]],
+        column_config={
+            "Percentage (%)": st.column_config.NumberColumn("Ratio (%)", format="%.1f%%"),
+            "Use Quantity (g)": st.column_config.NumberColumn("Batch Qty (g)", format="%.1f g"),
+            "Per 1 Used (g)": st.column_config.NumberColumn("Usage/Pc (g)", format="%.2f g"),
+            "Bulk Req (kg)": st.column_config.NumberColumn("Bulk RM Req (kg)", format="%.2f kg"),
+            "Unit Price ($/kg)": st.column_config.NumberColumn("Price ($/kg)", format="$%.2f"),
+            "Line Cost ($)": st.column_config.NumberColumn("Total Cost ($)", format="$%.2f")
+        },
+        use_container_width=True
+    )
 
     st.divider()
-    st.header("3. Technical Printing & Machine Setup Parameters")
+    st.header("4. Technical Machine Parameters & Sign-off")
     m_col1, m_col2 = st.columns(2)
     with m_col1:
         mesh = st.text_input("Mesh Count (T/Inch)", value="", placeholder="e.g. 120T (305 Mesh)")
@@ -430,8 +393,6 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
         belt_speed = st.text_input("Drying Belt Speed / Time", value="", placeholder="e.g. 90sec")
         passes = st.text_input("Number of Passes / Strokes", value="", placeholder="e.g. 2 Print - 1 Flash - 2 Print")
 
-    st.divider()
-    st.header("4. Sign-off Status")
     s_col1, s_col2 = st.columns(2)
     with s_col1:
         sig_rd = st.selectbox("R&D Exec Approval", ["Pending", "Approved", "Rejected"], index=1)
@@ -440,14 +401,15 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
         sig_qa = st.selectbox("Quality Dept Approval", ["Pending", "Approved", "Rejected"], index=1)
         sig_prod = st.selectbox("Production Manager Approval", ["Pending", "Approved", "Rejected"], index=1)
 
-    st.divider()
-    
     recipe_summary = {
         'recipe_id': recipe_id, 'date': str(rec_date), 'style_name': style_name,
         'print_tech': print_tech, 'created_by': created_by, 'revision': revision,
         'fabric_comp': fabric_comp, 'fabric_color': fabric_color, 'fabric_const': fabric_const,
         'gsm': gsm, 'dye_risk': dye_migration, 'undercoat': undercoat,
-        'batch_size': batch_size, 'formulation': calc_df.to_dict(orient="records"),
+        'batch_size': batch_size, 'target_pcs': target_pcs, 'order_qty': order_qty,
+        'wastage_pct': wastage_pct, 'per_pc_used': per_pc_used, 'total_bulk_rm_kg': total_bulk_rm_kg,
+        'cost_per_kg': cost_per_kg, 'cost_per_pc': cost_per_pc,
+        'formulation': calc_df.to_dict(orient="records"),
         'mesh': mesh, 'squeegee_duro': squeegee_duro, 'squeegee_angle': squeegee_angle,
         'off_contact': off_contact, 'flash_cure': flash_cure, 'main_cure': main_cure,
         'belt_speed': belt_speed, 'passes': passes, 'sig_rd': sig_rd, 'sig_qa': sig_qa,
@@ -455,79 +417,57 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
     }
 
     btn_col1, btn_col2 = st.columns(2)
-    
     with btn_col1:
-        if st.button("💾 Save Recipe to Master Library"):
+        if st.button("💾 Save Recipe & Material Plan to Excel"):
             if save_recipe_to_excel(recipe_summary):
-                st.success(f"✅ Recipe '{recipe_id}' saved to Excel successfully!")
+                st.success(f"✅ Recipe '{recipe_id}' saved successfully!")
                 st.rerun()
 
     with btn_col2:
-        if st.button("📄 Generate PDF Specification Report"):
+        if st.button("📄 Generate PDF Specification & Cost Report"):
             pdf_bytes = generate_pdf_report(recipe_summary)
             st.success("✅ PDF Specification Report generated!")
             st.download_button(
-                label="💾 Download PDF Report",
+                label="💾 Download Technical PDF",
                 data=pdf_bytes,
                 file_name=f"Recipe_Report_{recipe_id}.pdf",
                 mime="application/pdf"
             )
 
-    st.caption("<div style='text-align: right; color: #888888; font-size: 0.8em; margin-top: 20px;'>Developed by: Lab Executive - Lakshan Vimukthi</div>", unsafe_allow_html=True)
-
 elif menu == "📖 View & Search Saved Recipes":
-    st.header("📖 Saved Technical Recipes Library")
+    st.header("📖 Saved Technical Recipes & Cost Library")
     df_recipes = load_saved_recipes()
 
     if df_recipes.empty:
         st.info("No saved recipes found. Create and save a new recipe from the Recipe Builder!")
     else:
-        st.dataframe(df_recipes[['recipe_id', 'date', 'style_name', 'print_tech', 'created_by', 'revision', 'fabric_comp']], use_container_width=True)
-        
+        st.dataframe(df_recipes[['recipe_id', 'date', 'style_name', 'print_tech', 'order_qty', 'total_bulk_rm_kg', 'cost_per_pc']], use_container_width=True)
         st.divider()
-        st.subheader("🔍 Select Recipe to Inspect, Print PDF, or Delete")
-        
-        recipe_options = df_recipes['recipe_id'].tolist()
-        selected_id = st.selectbox("Select Recipe ID", options=recipe_options)
+        selected_id = st.selectbox("Select Recipe ID to Inspect", options=df_recipes['recipe_id'].tolist())
 
         if selected_id:
             recipe_row = df_recipes[df_recipes['recipe_id'] == selected_id].iloc[0].to_dict()
-            
             st.markdown(f"### Details for `{recipe_row['recipe_id']}`")
             col1, col2, col3 = st.columns(3)
             col1.write(f"**Style Name:** {recipe_row['style_name']}")
-            col1.write(f"**Date:** {recipe_row['date']}")
+            col1.write(f"**Order Qty:** {recipe_row.get('order_qty', 0):,} pcs")
             col2.write(f"**Print Tech:** {recipe_row['print_tech']}")
-            col2.write(f"**Created By:** {recipe_row['created_by']}")
-            col3.write(f"**Fabric Comp:** {recipe_row['fabric_comp']}")
-            col3.write(f"**Fabric Color:** {recipe_row['fabric_color']}")
+            col2.write(f"**Bulk Requirement:** {recipe_row.get('total_bulk_rm_kg', 0):.2f} kg")
+            col3.write(f"**Cost/Pc:** ${recipe_row.get('cost_per_pc', 0):.4f}")
 
-            st.write("#### Ink Formulation Table")
             form_data = json.loads(recipe_row['formulation']) if isinstance(recipe_row['formulation'], str) else recipe_row['formulation']
             st.dataframe(pd.DataFrame(form_data), use_container_width=True)
 
             action_col1, action_col2 = st.columns(2)
-            
             with action_col1:
                 pdf_bytes = generate_pdf_report(recipe_row)
-                st.download_button(
-                    label=f"📄 Download PDF for {recipe_row['recipe_id']}",
-                    data=pdf_bytes,
-                    file_name=f"Recipe_Report_{recipe_row['recipe_id']}.pdf",
-                    mime="application/pdf"
-                )
+                st.download_button(label=f"📄 Download PDF", data=pdf_bytes, file_name=f"Report_{selected_id}.pdf", mime="application/pdf")
 
-            # DELETE RECIPE ACTION WITH SAFETY CHECK
             with action_col2:
-                with st.expander("🗑️ Delete Recipe Option"):
-                    confirm_delete = st.checkbox(f"Confirm permanent deletion of {selected_id}?")
-                    if st.button(f"Permanently Delete {selected_id}", type="primary"):
-                        if confirm_delete:
-                            if delete_recipe_from_excel(selected_id):
-                                st.success(f"Deleted {selected_id} successfully!")
-                                st.rerun()
-                        else:
-                            st.warning("Please check the confirmation box first before deleting.")
+                if st.button(f"Permanently Delete {selected_id}", type="primary"):
+                    if delete_recipe_from_excel(selected_id):
+                        st.success(f"Deleted {selected_id} successfully!")
+                        st.rerun()
 
 elif menu == "📚 Chemical & Ink Library Manager":
     st.header("📚 Chemical & Advanced Ink Library")
@@ -537,17 +477,18 @@ elif menu == "📚 Chemical & Ink Library Manager":
             new_pname = st.text_input("Product Name", placeholder="e.g. Silicone Base Clear")
             new_code = st.text_input("Supplier / Product Code", placeholder="e.g. SIL-BASE-90")
             new_role = st.selectbox("Component Role", ["Base Transparent", "Base Opaque / White", "Pigment Colorant", "Catalyst / Hardener", "Crosslinker / Fixer", "Additive / Retarder", "Thinner / Reducer"])
+            new_price = st.number_input("Unit Price ($/kg)", min_value=0.0, step=0.50, value=12.00)
             new_notes = st.text_area("Notes & Properties", placeholder="e.g. High elasticity silicone base")
             
             if st.form_submit_button("Add to Library"):
                 if new_pname and new_code:
-                    new_item = pd.DataFrame([{"Product Name": new_pname, "Supplier Code": new_code, "Role": new_role, "Notes": new_notes}])
+                    new_item = pd.DataFrame([{"Product Name": new_pname, "Supplier Code": new_code, "Role": new_role, "Unit Price ($/kg)": new_price, "Notes": new_notes}])
                     st.session_state.ink_library = pd.concat([st.session_state.ink_library, new_item], ignore_index=True)
                     if save_ink_library_to_excel(st.session_state.ink_library):
-                        st.success(f"Added '{new_pname}' to chemical library and saved to Excel!")
+                        st.success(f"Added '{new_pname}' to chemical library!")
                         st.rerun()
                 else:
-                    st.warning("Please provide both Product Name and Code.")
+                    st.warning("Please provide Product Name and Code.")
 
     st.dataframe(st.session_state.ink_library, use_container_width=True)
 
@@ -556,46 +497,29 @@ elif menu == "🧪 Log R&D Trial Result":
     with st.form("log_trial_form"):
         col1, col2 = st.columns(2)
         with col1:
-            trial_id = st.text_input("Trial ID", value="TR-2026-006", placeholder="e.g. TR-2026-006")
-            style_ref = st.text_input("Style / Reference", value="ST-2026-GYM-01", placeholder="e.g. ST-2026-GYM-01")
-            fabric_type = st.text_input("Fabric Type", value="95% Ctn / 5% Elastane", placeholder="e.g. 95% Ctn / 5% Elastane")
-            recipe_var = st.text_area("Recipe / Parameter Variation", value="Added 3% Crosslinker XL-MOD-01", placeholder="e.g. Added 3% Crosslinker XL-MOD-01")
-            crocking_res = st.text_input("Crocking Result", value="Grade 4.5", placeholder="e.g. Grade 4.5")
+            trial_id = st.text_input("Trial ID", value="TR-2026-006")
+            style_ref = st.text_input("Style / Reference", value="ST-2026-GYM-01")
+            fabric_type = st.text_input("Fabric Type", value="95% Ctn / 5% Elastane")
+            recipe_var = st.text_area("Recipe / Parameter Variation", value="Added 3% Crosslinker XL-MOD-01")
+            crocking_res = st.text_input("Crocking Result", value="Grade 4.5")
         with col2:
             trial_date = st.date_input("Date", value=datetime.now().date())
             technique = st.selectbox("Technique", ["Silicone", "Rubber Print", "High Density", "Flock Print", "Glitter Print"])
-            objective = st.text_area("Trial Objective", value="Improve wash fastness past 20 cycles", placeholder="e.g. Improve wash fastness past 20 cycles")
-            wash_res = st.text_input("Wash Result (20 Cycles)", value="Grade 4.5 (Pass)", placeholder="e.g. Grade 4.5 (Pass)")
+            objective = st.text_area("Trial Objective", value="Improve wash fastness past 20 cycles")
+            wash_res = st.text_input("Wash Result (20 Cycles)", value="Grade 4.5 (Pass)")
             status = st.selectbox("Overall Status", ["APPROVED", "REJECTED", "PENDING"])
         
         if st.form_submit_button("Save Trial Log"):
-            trial_data = {
-                "Trial ID": trial_id,
-                "Date": str(trial_date),
-                "Style / Reference": style_ref,
-                "Technique": technique,
-                "Fabric Type": fabric_type,
-                "Objective": objective,
-                "Recipe Variation": recipe_var,
-                "Wash Result": wash_res,
-                "Crocking Result": crocking_res,
-                "Status": status
-            }
+            trial_data = {"Trial ID": trial_id, "Date": str(trial_date), "Style / Reference": style_ref, "Technique": technique, "Fabric Type": fabric_type, "Objective": objective, "Recipe Variation": recipe_var, "Wash Result": wash_res, "Crocking Result": crocking_res, "Status": status}
             if save_trial_to_excel(trial_data):
-                st.success(f"Trial {trial_id} logged and saved to Excel successfully!")
+                st.success(f"Trial {trial_id} saved successfully!")
 
 elif menu == "📊 View Master Trial Log":
     st.header("R&D Master Experimental & Durability Trial Log")
     fresh_trials, _ = load_data()
-    if not fresh_trials.empty:
-        st.dataframe(fresh_trials, use_container_width=True)
-    else:
-        st.info("No trial records found in the Excel workbook yet.")
+    st.dataframe(fresh_trials, use_container_width=True) if not fresh_trials.empty else st.info("No trial records found.")
 
 elif menu == "🧩 Fabric Compatibility Matrix":
     st.header("Print Technique vs. Fabric Substrate Compatibility Matrix")
     _, fresh_matrix = load_data()
-    if not fresh_matrix.empty:
-        st.dataframe(fresh_matrix, use_container_width=True)
-    else:
-        st.info("No compatibility matrix sheet found in the Excel workbook.")
+    st.dataframe(fresh_matrix, use_container_width=True) if not fresh_matrix.empty else st.info("No compatibility matrix sheet found.")
