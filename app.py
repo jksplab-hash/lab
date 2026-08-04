@@ -6,6 +6,7 @@ import io
 import os
 import json
 import bcrypt
+import extra_streamlit_components as stx
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -14,9 +15,12 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 st.set_page_config(page_title="Screen Printing R&D Portal", layout="wide", page_icon="🎨")
 
 # ==========================================
-# AUTHENTICATION & USER MANAGEMENT MODULE
+# AUTHENTICATION & COOKIE MANAGEMENT MODULE
 # ==========================================
 USERS_FILE = "users.json"
+
+# Fix: Initialize CookieManager directly without @st.cache_resource
+cookie_manager = stx.CookieManager(key="rnd_cookie_manager")
 
 def load_users():
     """Load user accounts from a JSON file or create a default admin account."""
@@ -28,7 +32,6 @@ def load_users():
             st.error(f"Error loading user database: {e}")
     
     # Default Admin Credentials if file doesn't exist
-    # Default Admin Password: admin123 (You can change this after logging in)
     default_admin_hash = bcrypt.hashpw("admin123".encode(), bcrypt.gensalt()).decode()
     default_users = {
         "admin": {
@@ -58,7 +61,15 @@ def hash_password(password):
     """Generate bcrypt hash for a password."""
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
-# Initialize authentication state
+# Check browser cookies for existing logged-in user
+auth_cookie = cookie_manager.get(cookie="rnd_portal_auth")
+
+# Restore session if cookie exists
+if auth_cookie and isinstance(auth_cookie, dict):
+    st.session_state.authenticated = True
+    st.session_state.user_info = auth_cookie
+
+# Initialize fallback session state
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 if "user_info" not in st.session_state:
@@ -80,12 +91,21 @@ if not st.session_state.authenticated:
                 users = load_users()
                 user = users.get(username_input)
                 if user and verify_password(password_input, user["password"]):
-                    st.session_state.authenticated = True
-                    st.session_state.user_info = {
+                    user_payload = {
                         "username": username_input,
                         "name": user["name"],
                         "role": user["role"]
                     }
+                    st.session_state.authenticated = True
+                    st.session_state.user_info = user_payload
+
+                    # Set persistent browser cookie
+                    cookie_manager.set(
+                        "rnd_portal_auth", 
+                        user_payload, 
+                        key="auth_cookie_setter"
+                    )
+                    
                     st.success("Login successful!")
                     st.rerun()
                 else:
@@ -389,6 +409,7 @@ st.sidebar.markdown(f"🏷️ Role: **{st.session_state.user_info['role'].capita
 if st.sidebar.button("🚪 Logout"):
     st.session_state.authenticated = False
     st.session_state.user_info = None
+    cookie_manager.delete("rnd_portal_auth", key="auth_cookie_deleter")
     st.rerun()
 
 st.sidebar.divider()
