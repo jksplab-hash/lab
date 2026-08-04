@@ -1,7 +1,12 @@
 {
     "admin": {
         "name": "Administrator",
-        "password": "$2b$12$iK/aSiopOQLD.H9qxTWtI.gZnDJTNIq.9Z1zUyxGKZ8wW.Djeu4mi",
+        "password": "$2b$12$bdlt6TMGjZ2gE.l8GsKlMOY7mvQa3VuhDwIev40kCZGBaBBIEuQrq",
         "role": "admin"
+    },
+    "dhanushka": {
+        "name": "Dhanushka",
+        "password": "$2b$12$Wv3XSH2QviPEWlCSwJ7a2.mXHFreXeEtxjyl59fenQ0jrzuGREHKK",
+        "role": "colleague"
     }
 }
