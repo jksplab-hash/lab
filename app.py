@@ -541,6 +541,14 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
     column_order = ["Delete", "Product Name", "Badge Number", "Expiry Date", "Percentage (%)", "Unit Price ($/kg)"]
     display_df = form_df.reindex(columns=column_order)
 
+    # Convert data types so Streamlit st.data_editor type check passes
+    display_df["Delete"] = display_df["Delete"].astype(bool)
+    display_df["Product Name"] = display_df["Product Name"].astype(str).replace({"None": None, "nan": None})
+    display_df["Badge Number"] = display_df["Badge Number"].astype(str).replace({"None": None, "nan": None})
+    display_df["Expiry Date"] = pd.to_datetime(display_df["Expiry Date"], errors="coerce")
+    display_df["Percentage (%)"] = pd.to_numeric(display_df["Percentage (%)"], errors="coerce")
+    display_df["Unit Price ($/kg)"] = pd.to_numeric(display_df["Unit Price ($/kg)"], errors="coerce")
+
     edited_df = st.data_editor(
         display_df,
         num_rows="dynamic",
