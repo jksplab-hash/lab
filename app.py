@@ -259,10 +259,10 @@ def get_next_recipe_id():
 if "ink_library" not in st.session_state:
     st.session_state.ink_library = load_ink_library()
 
-# Empty chemical formulation table ready for fresh data input
+# Empty chemical formulation table ready for fresh data input (Badge Number included)
 if "formulation_df" not in st.session_state:
     st.session_state.formulation_df = pd.DataFrame([
-        {"Delete": False, "Product Name": None, "Badge Number": "", "Expiry Date": None, "Percentage (%)": None, "Unit Price ($/kg)": None}
+        {"Delete": False, "Product Name": None, "Badge Number": None, "Expiry Date": None, "Percentage (%)": None, "Unit Price ($/kg)": None}
     ])
 
 # Helper Function: Load Master Logs
@@ -359,7 +359,7 @@ def generate_pdf_report(data):
     ]))
     elements.append(t_p)
 
-    # Formulation Table with Badge No and Expiry Date next to Product Name
+    # Formulation Table with Badge Number directly to the left of Expiry Date
     elements.append(Paragraph("2. INK FORMULATION & BOM COST BREAKDOWN", sec_style))
     ink_headers = ["Product Name", "Badge No", "Expiry Date", "Ratio", "Sample (g)", "Per Pc (g)", "Bulk Req (kg)", "Price/kg", "Total ($)"]
     i_table = [[Paragraph(f"<b>{h}</b>", ParagraphStyle('TH', parent=p_style, textColor=colors.white)) for h in ink_headers]]
@@ -370,6 +370,10 @@ def generate_pdf_report(data):
         if not pname or pname == 'None':
             continue
             
+        badge_num = str(row.get('Badge Number', '') or '')
+        if badge_num == 'None':
+            badge_num = ''
+
         exp_val = str(row.get('Expiry Date', ''))
         if exp_val and exp_val != 'None':
             exp_str = str(exp_val)[:10]
@@ -378,7 +382,7 @@ def generate_pdf_report(data):
 
         i_table.append([
             Paragraph(pname, p_style),
-            Paragraph(str(row.get('Badge Number', '') or ''), p_style),
+            Paragraph(badge_num, p_style),
             Paragraph(exp_str, p_style),
             Paragraph(f"{float(row.get('Percentage (%)', 0) or 0):.1f}%", p_style),
             Paragraph(f"{float(row.get('Use Quantity (g)', 0) or 0):.1f}g", p_style),
@@ -387,7 +391,7 @@ def generate_pdf_report(data):
             Paragraph(f"${float(row.get('Unit Price ($/kg)', 0) or 0):.2f}", p_style),
             Paragraph(f"${float(row.get('Line Cost ($)', 0) or 0):.2f}", p_style),
         ])
-    t_i = Table(i_table, colWidths=[110, 60, 60, 45, 50, 50, 55, 50, 55])
+    t_i = Table(i_table, colWidths=[110, 50, 60, 45, 50, 50, 55, 50, 55])
     t_i.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1E293B')), 
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')), 
@@ -533,7 +537,7 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
         if pname in price_map and (pd.isna(row.get("Unit Price ($/kg)")) or row.get("Unit Price ($/kg)") == 0):
             form_df.at[idx, "Unit Price ($/kg)"] = price_map[pname]
 
-    # Explicit Column Order with Badge Number & Expiry Date directly next to Product Name
+    # Column order with Badge Number positioned to the left of Expiry Date
     column_order = ["Delete", "Product Name", "Badge Number", "Expiry Date", "Percentage (%)", "Unit Price ($/kg)"]
     display_df = form_df.reindex(columns=column_order)
 
@@ -543,7 +547,7 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
         column_config={
             "Delete": st.column_config.CheckboxColumn("Delete?", default=False),
             "Product Name": st.column_config.SelectboxColumn("Product Name", options=available_products, required=False),
-            "Badge Number": st.column_config.TextColumn("Badge Number", default=""),
+            "Badge Number": st.column_config.TextColumn("Badge Number"),
             "Expiry Date": st.column_config.DateColumn("Expiry Date"),
             "Percentage (%)": st.column_config.NumberColumn("Ratio (%)", min_value=0.0, max_value=100.0, step=0.5, format="%.1f%%"),
             "Unit Price ($/kg)": st.column_config.NumberColumn("Unit Price ($/kg)", min_value=0.0, step=0.50, format="$%.2f")
@@ -659,22 +663,29 @@ elif menu == "📖 View & Search Saved Recipes":
     if df_recipes.empty:
         st.info("No saved recipes found. Create and save a new recipe from the Recipe Builder!")
     else:
-        st.dataframe(df_recipes[['recipe_id', 'date', 'style_name', 'print_tech', 'order_qty', 'total_bulk_rm_kg', 'cost_per_pc']], use_container_width=True)
+        target_cols = ['recipe_id', 'style_name', 'batch_size', 'print_tech', 'order_qty']
+        valid_cols = [col for col in target_cols if col in df_recipes.columns]
+        
+        st.dataframe(df_recipes[valid_cols], use_container_width=True)
         st.divider()
         selected_id = st.selectbox("Select Recipe ID to Inspect", options=df_recipes['recipe_id'].tolist())
 
         if selected_id:
             recipe_row = df_recipes[df_recipes['recipe_id'] == selected_id].iloc[0].to_dict()
             st.markdown(f"### Details for `{recipe_row['recipe_id']}`")
-            col1, col2, col3 = st.columns(3)
-            col1.write(f"**Style Name:** {recipe_row['style_name']}")
+            col1, col2 = st.columns(2)
+            col1.write(f"**Style Name:** {recipe_row.get('style_name', '')}")
             col1.write(f"**Order Qty:** {recipe_row.get('order_qty', 0):,} pcs")
-            col2.write(f"**Print Tech:** {recipe_row['print_tech']}")
-            col2.write(f"**Bulk Requirement:** {recipe_row.get('total_bulk_rm_kg', 0):.2f} kg")
-            col3.write(f"**Cost/Pc:** ${recipe_row.get('cost_per_pc', 0):.4f}")
+            col2.write(f"**Print Tech:** {recipe_row.get('print_tech', '')}")
+            col2.write(f"**Batch Size:** {recipe_row.get('batch_size', 0)} g")
 
-            form_data = json.loads(recipe_row['formulation']) if isinstance(recipe_row['formulation'], str) else recipe_row['formulation']
-            st.dataframe(pd.DataFrame(form_data), use_container_width=True)
+            form_data = json.loads(recipe_row['formulation']) if isinstance(recipe_row.get('formulation'), str) else recipe_row.get('formulation', [])
+            df_form = pd.DataFrame(form_data)
+            
+            display_cols = [c for c in ['Product Name', 'Badge Number', 'Expiry Date', 'Percentage (%)', 'Use Quantity (g)'] if c in df_form.columns]
+            
+            st.markdown("#### Formulation & Material Details")
+            st.dataframe(df_form[display_cols] if not df_form.empty and display_cols else df_form, use_container_width=True)
 
             action_col1, action_col2 = st.columns(2)
             with action_col1:
@@ -701,9 +712,7 @@ elif menu == "📚 Chemical & Ink Library Manager":
             if st.form_submit_button("Add to Library"):
                 if new_pname and new_code:
                     new_item = pd.DataFrame([{"Product Name": new_pname, "Supplier Code": new_code, "Role": new_role, "Unit Price ($/kg)": new_price, "Notes": new_notes}])
-                    # Update session state
                     st.session_state.ink_library = pd.concat([st.session_state.ink_library, new_item], ignore_index=True)
-                    # Persist to Excel file & refresh app state
                     if save_ink_library_to_excel(st.session_state.ink_library):
                         st.success(f"Added '{new_pname}' to chemical library and saved to Excel!")
                         st.rerun()
