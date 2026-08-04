@@ -7,7 +7,6 @@ import os
 import json
 import bcrypt
 import extra_streamlit_components as stx
-from github import Github  # <-- Integrated PyGithub for permanent persistent updates
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -16,23 +15,38 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 st.set_page_config(page_title="Screen Printing R&D Portal", layout="wide", page_icon="🎨")
 
 # ==========================================
+# FILE CONFIGURATIONS
+# ==========================================
+EXCEL_FILE = "Screen_Printing_RND_Technical_Library_Workbook.xlsx"
+USERS_SHEET = "Users"
+INK_LIBRARY_SHEET = "Chemical Ink Library"
+RECIPE_LOG_SHEET = "Saved Technical Recipes"
+
+# ==========================================
 # AUTHENTICATION & COOKIE MANAGEMENT MODULE
 # ==========================================
-USERS_FILE = "users.json"
-
-# Fix: Initialize CookieManager directly without @st.cache_resource
 cookie_manager = stx.CookieManager(key="rnd_cookie_manager")
 
 def load_users():
-    """Load user accounts from a JSON file or create a default admin account."""
-    if os.path.exists(USERS_FILE):
+    """Load user accounts directly from the Excel workbook."""
+    if os.path.exists(EXCEL_FILE):
         try:
-            with open(USERS_FILE, "r") as f:
-                return json.load(f)
+            xls = pd.ExcelFile(EXCEL_FILE)
+            if USERS_SHEET in xls.sheet_names:
+                df = pd.read_excel(xls, USERS_SHEET)
+                if not df.empty:
+                    users_dict = {}
+                    for _, row in df.iterrows():
+                        users_dict[str(row["username"]).strip().lower()] = {
+                            "name": row["name"],
+                            "password": row["password"],
+                            "role": row["role"]
+                        }
+                    return users_dict
         except Exception as e:
-            st.error(f"Error loading user database: {e}")
-    
-    # Default Admin Credentials if file doesn't exist
+            st.error(f"Error loading user database from Excel: {e}")
+
+    # Default Admin Credentials if file/sheet doesn't exist yet
     default_admin_hash = bcrypt.hashpw("admin123".encode(), bcrypt.gensalt()).decode()
     default_users = {
         "admin": {
@@ -45,39 +59,28 @@ def load_users():
     return default_users
 
 def save_users(users_dict):
-    """Save user accounts to local JSON file and commit directly to GitHub repository."""
-    json_data = json.dumps(users_dict, indent=4)
-    
-    # 1. Save locally for the active session
+    """Save user accounts directly to the Excel workbook."""
     try:
-        with open(USERS_FILE, "w") as f:
-            f.write(json_data)
-    except Exception as e:
-        st.error(f"Error saving users locally: {e}")
-        return False
+        user_rows = []
+        for uname, uinfo in users_dict.items():
+            user_rows.append({
+                "username": uname,
+                "name": uinfo.get("name", ""),
+                "password": uinfo.get("password", ""),
+                "role": uinfo.get("role", "colleague")
+            })
+        
+        df_users = pd.DataFrame(user_rows)
 
-    # 2. Commit update directly to GitHub so user accounts survive app reboots/updates
-    try:
-        if "github_token" in st.secrets and "repo_name" in st.secrets:
-            g = Github(st.secrets["github_token"])
-            repo = g.get_repo(st.secrets["repo_name"])
-            
-            # Retrieve existing file SHA required by GitHub API for updates
-            file_contents = repo.get_contents(USERS_FILE, ref="main")
-            
-            # Push commit to GitHub main branch
-            repo.update_file(
-                path=USERS_FILE,
-                message="🤖 Auto-update users.json from Admin Panel",
-                content=json_data,
-                sha=file_contents.sha,
-                branch="main"
-            )
+        if os.path.exists(EXCEL_FILE):
+            with pd.ExcelWriter(EXCEL_FILE, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+                df_users.to_excel(writer, sheet_name=USERS_SHEET, index=False)
         else:
-            st.warning("⚠️ GitHub credentials missing in Streamlit secrets. Accounts will reset on reboot.")
+            with pd.ExcelWriter(EXCEL_FILE, engine='openpyxl') as writer:
+                df_users.to_excel(writer, sheet_name=USERS_SHEET, index=False)
         return True
     except Exception as e:
-        st.error(f"Failed to commit updated users.json to GitHub: {e}")
+        st.error(f"Failed to save users to Excel file: {e}")
         return False
 
 def verify_password(plain_password, hashed_password):
@@ -142,10 +145,6 @@ if not st.session_state.authenticated:
 # ==========================================
 # EXCEL & FILE CONFIGURATIONS
 # ==========================================
-EXCEL_FILE = "Screen_Printing_RND_Technical_Library_Workbook.xlsx"
-INK_LIBRARY_SHEET = "Chemical Ink Library"
-RECIPE_LOG_SHEET = "Saved Technical Recipes"
-
 INITIAL_INK_LIBRARY = [
     {"Product Name": "Silicone Base Clear", "Supplier Code": "SIL-BASE-90", "Role": "Base Transparent", "Unit Price ($/kg)": 14.50, "Notes": "High elasticity silicone base"},
     {"Product Name": "Silicone White Undercoat", "Supplier Code": "SIL-WHT-10", "Role": "Base Opaque / White", "Unit Price ($/kg)": 12.00, "Notes": "Provides opacity & bleed barrier"},
