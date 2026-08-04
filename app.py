@@ -22,13 +22,22 @@ USERS_SHEET = "Users"
 INK_LIBRARY_SHEET = "Chemical Ink Library"
 RECIPE_LOG_SHEET = "Saved Technical Recipes"
 
+# Helper Functions for Password Hashing and Verification
+def verify_password(plain_password, hashed_password):
+    """Verify password against bcrypt hash."""
+    return bcrypt.checkpw(plain_password.encode(), hashed_password.encode())
+
+def hash_password(password):
+    """Generate bcrypt hash for a password."""
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
 # ==========================================
 # AUTHENTICATION & COOKIE MANAGEMENT MODULE
 # ==========================================
 cookie_manager = stx.CookieManager(key="rnd_cookie_manager")
 
 def load_users():
-    """Load user accounts directly from the Excel workbook."""
+    """Load user accounts directly from the Excel workbook or initialize default accounts."""
     if os.path.exists(EXCEL_FILE):
         try:
             xls = pd.ExcelFile(EXCEL_FILE)
@@ -38,21 +47,30 @@ def load_users():
                     users_dict = {}
                     for _, row in df.iterrows():
                         users_dict[str(row["username"]).strip().lower()] = {
-                            "name": row["name"],
-                            "password": row["password"],
-                            "role": row["role"]
+                            "name": str(row["name"]),
+                            "password": str(row["password"]),
+                            "role": str(row["role"])
                         }
                     return users_dict
         except Exception as e:
             st.error(f"Error loading user database from Excel: {e}")
 
-    # Default Admin Credentials if file/sheet doesn't exist yet
-    default_admin_hash = bcrypt.hashpw("admin123".encode(), bcrypt.gensalt()).decode()
+    # Default Credentials hashed dynamically at runtime
     default_users = {
         "admin": {
             "name": "Administrator",
-            "password": default_admin_hash,
+            "password": hash_password("admin123"),
             "role": "admin"
+        },
+        "dhanushka": {
+            "name": "Dhanushka",
+            "password": hash_password("Dhanushka1230"),
+            "role": "colleague"
+        },
+        "dinuka": {
+            "name": "Dinuka",
+            "password": hash_password("Dinuka1230"),
+            "role": "colleague"
         }
     }
     save_users(default_users)
@@ -82,14 +100,6 @@ def save_users(users_dict):
     except Exception as e:
         st.error(f"Failed to save users to Excel file: {e}")
         return False
-
-def verify_password(plain_password, hashed_password):
-    """Verify password against bcrypt hash."""
-    return bcrypt.checkpw(plain_password.encode(), hashed_password.encode())
-
-def hash_password(password):
-    """Generate bcrypt hash for a password."""
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 # Check browser cookies for existing logged-in user
 auth_cookie = cookie_manager.get(cookie="rnd_portal_auth")
