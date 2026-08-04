@@ -7,6 +7,7 @@ import os
 import json
 import bcrypt
 import extra_streamlit_components as stx
+from github import Github  # <-- Integrated PyGithub for permanent persistent updates
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -44,13 +45,39 @@ def load_users():
     return default_users
 
 def save_users(users_dict):
-    """Save user accounts to a JSON file."""
+    """Save user accounts to local JSON file and commit directly to GitHub repository."""
+    json_data = json.dumps(users_dict, indent=4)
+    
+    # 1. Save locally for the active session
     try:
         with open(USERS_FILE, "w") as f:
-            json.dump(users_dict, f, indent=4)
+            f.write(json_data)
+    except Exception as e:
+        st.error(f"Error saving users locally: {e}")
+        return False
+
+    # 2. Commit update directly to GitHub so user accounts survive app reboots/updates
+    try:
+        if "github_token" in st.secrets and "repo_name" in st.secrets:
+            g = Github(st.secrets["github_token"])
+            repo = g.get_repo(st.secrets["repo_name"])
+            
+            # Retrieve existing file SHA required by GitHub API for updates
+            file_contents = repo.get_contents(USERS_FILE, ref="main")
+            
+            # Push commit to GitHub main branch
+            repo.update_file(
+                path=USERS_FILE,
+                message="🤖 Auto-update users.json from Admin Panel",
+                content=json_data,
+                sha=file_contents.sha,
+                branch="main"
+            )
+        else:
+            st.warning("⚠️ GitHub credentials missing in Streamlit secrets. Accounts will reset on reboot.")
         return True
     except Exception as e:
-        st.error(f"Error saving users: {e}")
+        st.error(f"Failed to commit updated users.json to GitHub: {e}")
         return False
 
 def verify_password(plain_password, hashed_password):

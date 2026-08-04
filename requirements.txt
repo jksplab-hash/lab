@@ -4,3 +4,4 @@ openpyxl
 reportlab
 bcrypt
 extra-streamlit-components
+PyGithub
