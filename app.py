@@ -12,7 +12,7 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
 
-st.set_page_config(page_title="Screen Printing R&D Portal", layout="wide", page_icon="🎨")
+st.set_page_config(page_title="Jk Screen printing Technical and costing portal", layout="wide", page_icon="🎨")
 
 # ==========================================
 # FILE CONFIGURATIONS
@@ -117,7 +117,7 @@ if "user_info" not in st.session_state:
 
 # Render Login Screen if not authenticated
 if not st.session_state.authenticated:
-    st.title("🎨 Screen Printing R&D Portal - Secure Login")
+    st.title("🎨 Jk Screen printing Technical and costing portal - Secure Login")
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
@@ -322,7 +322,7 @@ def generate_pdf_report(data):
     p_style = ParagraphStyle('BodyCustom', parent=styles['Normal'], fontName='Helvetica', fontSize=8, leading=10)
     
     elements = []
-    elements.append(Paragraph("JK GARMENT SCREEN PRINTING R&D", title_style))
+    elements.append(Paragraph("JK GARMENT SCREEN PRINTING", title_style))
     elements.append(Paragraph("TECHNICAL RECIPE & PRODUCTION REQUIREMENT REPORT", subtitle_style))
     elements.append(Spacer(1, 4))
     elements.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#2563EB'), spaceAfter=6))
@@ -480,7 +480,7 @@ menu = st.sidebar.radio("Select Action", menu_options)
 # ==========================================
 
 if menu == "🎨 Technical Recipe Builder & Report Generator":
-    st.title("🎨 Screen Printing R&D & Costing Portal")
+    st.title("🎨 Jk Screen printing Technical and costing portal")
     st.header("1. Job Header & Substrate Specifications")
     auto_recipe_id = get_next_recipe_id()
 
