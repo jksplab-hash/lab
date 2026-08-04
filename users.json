@@ -8,5 +8,10 @@
         "name": "Dhanushka",
         "password": "$2b$12$Wv3XSH2QviPEWlCSwJ7a2.mXHFreXeEtxjyl59fenQ0jrzuGREHKK",
         "role": "colleague"
+    },
+    "dinuka": {
+        "name": "Dinuka",
+        "password": "$2b$12$NqM0fX0A39yAOBYFGr/V and bcrypt hash of Dinuka1230",
+        "role": "colleague"
     }
 }
