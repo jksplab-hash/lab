@@ -249,13 +249,10 @@ def get_next_recipe_id():
 if "ink_library" not in st.session_state:
     st.session_state.ink_library = load_ink_library()
 
+# Empty chemical formulation table ready for fresh data input
 if "formulation_df" not in st.session_state:
     st.session_state.formulation_df = pd.DataFrame([
-        {"Delete": False, "Role": "Base Transparent", "Product Name": "Silicone Base Clear", "Code": "SIL-BASE-90", "Percentage (%)": 70.0, "Unit Price ($/kg)": 14.50, "Mixing Notes": "High elasticity base"},
-        {"Delete": False, "Role": "Base Opaque / White", "Product Name": "Silicone White Undercoat", "Code": "SIL-WHT-10", "Percentage (%)": 20.0, "Unit Price ($/kg)": 12.00, "Mixing Notes": "Provides opacity & bleed barrier"},
-        {"Delete": False, "Role": "Pigment Colorant", "Product Name": "High Fastness Black Pigment", "Code": "PIG-BLK-05", "Percentage (%)": 5.0, "Unit Price ($/kg)": 18.00, "Mixing Notes": "Color shade matching"},
-        {"Delete": False, "Role": "Catalyst / Hardener", "Product Name": "Silicone Platinum Catalyst", "Code": "CAT-SIL-02", "Percentage (%)": 2.0, "Unit Price ($/kg)": 45.00, "Mixing Notes": "Mix thoroughly before printing"},
-        {"Delete": False, "Role": "Crosslinker / Fixer", "Product Name": "Anti-Fading Crosslinker", "Code": "XL-MOD-01", "Percentage (%)": 3.0, "Unit Price ($/kg)": 28.00, "Mixing Notes": "Enhances wash fastness (20+ cycles)"}
+        {"Delete": False, "Product Name": None, "Badge Number": "", "Expiry Date": None, "Percentage (%)": None, "Unit Price ($/kg)": None}
     ])
 
 # Helper Function: Load Master Logs
@@ -352,25 +349,35 @@ def generate_pdf_report(data):
     ]))
     elements.append(t_p)
 
-    # Formulation Table
+    # Formulation Table with Badge No and Expiry Date next to Product Name
     elements.append(Paragraph("2. INK FORMULATION & BOM COST BREAKDOWN", sec_style))
-    ink_headers = ["Role", "Product Name", "Code", "Ratio", "Sample (g)", "Per Pc (g)", "Bulk Req (kg)", "Price/kg", "Total ($)"]
+    ink_headers = ["Product Name", "Badge No", "Expiry Date", "Ratio", "Sample (g)", "Per Pc (g)", "Bulk Req (kg)", "Price/kg", "Total ($)"]
     i_table = [[Paragraph(f"<b>{h}</b>", ParagraphStyle('TH', parent=p_style, textColor=colors.white)) for h in ink_headers]]
     
     formulation_list = json.loads(data['formulation']) if isinstance(data.get('formulation'), str) else data.get('formulation', [])
     for row in formulation_list:
+        pname = str(row.get('Product Name', ''))
+        if not pname or pname == 'None':
+            continue
+            
+        exp_val = str(row.get('Expiry Date', ''))
+        if exp_val and exp_val != 'None':
+            exp_str = str(exp_val)[:10]
+        else:
+            exp_str = ''
+
         i_table.append([
-            Paragraph(str(row.get('Role', '')), p_style),
-            Paragraph(str(row.get('Product Name', '')), p_style),
-            Paragraph(str(row.get('Code', '')), p_style),
-            Paragraph(f"{float(row.get('Percentage (%)', 0)):.1f}%", p_style),
-            Paragraph(f"{float(row.get('Use Quantity (g)', 0)):.1f}g", p_style),
-            Paragraph(f"{float(row.get('Per 1 Used (g)', 0)):.2f}g", p_style),
-            Paragraph(f"{float(row.get('Bulk Req (kg)', 0)):.2f}kg", p_style),
-            Paragraph(f"${float(row.get('Unit Price ($/kg)', 0)):.2f}", p_style),
-            Paragraph(f"${float(row.get('Line Cost ($)', 0)):.2f}", p_style),
+            Paragraph(pname, p_style),
+            Paragraph(str(row.get('Badge Number', '') or ''), p_style),
+            Paragraph(exp_str, p_style),
+            Paragraph(f"{float(row.get('Percentage (%)', 0) or 0):.1f}%", p_style),
+            Paragraph(f"{float(row.get('Use Quantity (g)', 0) or 0):.1f}g", p_style),
+            Paragraph(f"{float(row.get('Per 1 Used (g)', 0) or 0):.2f}g", p_style),
+            Paragraph(f"{float(row.get('Bulk Req (kg)', 0) or 0):.2f}kg", p_style),
+            Paragraph(f"${float(row.get('Unit Price ($/kg)', 0) or 0):.2f}", p_style),
+            Paragraph(f"${float(row.get('Line Cost ($)', 0) or 0):.2f}", p_style),
         ])
-    t_i = Table(i_table, colWidths=[70, 105, 50, 40, 50, 50, 55, 50, 50])
+    t_i = Table(i_table, colWidths=[110, 60, 60, 45, 50, 50, 55, 50, 55])
     t_i.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1E293B')), 
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')), 
@@ -407,7 +414,7 @@ def generate_pdf_report(data):
     ]))
     elements.append(t_s)
 
-    # Footer Callback Function for Created By & Developed By Labels
+    # Footer Callback Function
     created_by_text = str(data.get('created_by', '')).strip().lower()
     left_footer = f"created by {created_by_text}" if created_by_text else "created by unknown"
     right_footer = "Developed by - Lab Executive - Lakshan Vimukthi"
@@ -416,9 +423,7 @@ def generate_pdf_report(data):
         canvas.saveState()
         canvas.setFont("Helvetica", 7)
         canvas.setFillColor(colors.HexColor('#64748B'))
-        # Bottom-Left: Small letters creator name
         canvas.drawString(25, 15, left_footer)
-        # Bottom-Right: Small words Developed by - Lab Executive - Lakshan Vimukthi
         canvas.drawRightString(pdf_doc.pagesize[0] - 25, 15, right_footer)
         canvas.restoreState()
 
@@ -505,23 +510,21 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
     st.divider()
     st.header("3. Chemical Recipe Formulation & Costing")
 
-    # Sync price and code mappings from master library
+    # Sync price mappings from master library
     ink_lib = st.session_state.ink_library
-    code_map = dict(zip(ink_lib["Product Name"], ink_lib["Supplier Code"]))
     price_map = dict(zip(ink_lib["Product Name"], ink_lib["Unit Price ($/kg)"]))
     available_products = sorted(ink_lib["Product Name"].dropna().tolist()) or [""]
 
     form_df = st.session_state.formulation_df.copy()
 
-    # Synchronize codes & prices
+    # Synchronize prices if product is chosen
     for idx, row in form_df.iterrows():
         pname = row.get("Product Name")
-        if pname in code_map:
-            form_df.at[idx, "Code"] = code_map[pname]
         if pname in price_map and (pd.isna(row.get("Unit Price ($/kg)")) or row.get("Unit Price ($/kg)") == 0):
             form_df.at[idx, "Unit Price ($/kg)"] = price_map[pname]
 
-    column_order = ["Delete", "Role", "Product Name", "Code", "Percentage (%)", "Unit Price ($/kg)", "Mixing Notes"]
+    # Explicit Column Order with Badge Number & Expiry Date directly next to Product Name
+    column_order = ["Delete", "Product Name", "Badge Number", "Expiry Date", "Percentage (%)", "Unit Price ($/kg)"]
     display_df = form_df.reindex(columns=column_order)
 
     edited_df = st.data_editor(
@@ -529,12 +532,11 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
         num_rows="dynamic",
         column_config={
             "Delete": st.column_config.CheckboxColumn("Delete?", default=False),
-            "Role": st.column_config.SelectboxColumn("Component Role", options=["Base Transparent", "Base Opaque / White", "Pigment Colorant", "Catalyst / Hardener", "Crosslinker / Fixer", "Additive / Retarder", "Thinner / Reducer", "Thickeners", "Other"], required=True),
-            "Product Name": st.column_config.SelectboxColumn("Product Name", options=available_products, required=True),
-            "Code": st.column_config.TextColumn("Code", disabled=True),
+            "Product Name": st.column_config.SelectboxColumn("Product Name", options=available_products, required=False),
+            "Badge Number": st.column_config.TextColumn("Badge Number", default=""),
+            "Expiry Date": st.column_config.DateColumn("Expiry Date"),
             "Percentage (%)": st.column_config.NumberColumn("Ratio (%)", min_value=0.0, max_value=100.0, step=0.5, format="%.1f%%"),
-            "Unit Price ($/kg)": st.column_config.NumberColumn("Unit Price ($/kg)", min_value=0.0, step=0.50, format="$%.2f"),
-            "Mixing Notes": st.column_config.TextColumn("Mixing Notes")
+            "Unit Price ($/kg)": st.column_config.NumberColumn("Unit Price ($/kg)", min_value=0.0, step=0.50, format="$%.2f")
         },
         use_container_width=True,
         key="formulation_editor"
@@ -571,8 +573,10 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
 
     st.subheader("Calculated Requirement & Costing Preview")
     st.dataframe(
-        calc_df[["Role", "Product Name", "Code", "Percentage (%)", "Use Quantity (g)", "Per 1 Used (g)", "Bulk Req (kg)", "Unit Price ($/kg)", "Line Cost ($)"]],
+        calc_df[["Product Name", "Badge Number", "Expiry Date", "Percentage (%)", "Use Quantity (g)", "Per 1 Used (g)", "Bulk Req (kg)", "Unit Price ($/kg)", "Line Cost ($)"]],
         column_config={
+            "Badge Number": st.column_config.TextColumn("Badge Number"),
+            "Expiry Date": st.column_config.DateColumn("Expiry Date"),
             "Percentage (%)": st.column_config.NumberColumn("Ratio (%)", format="%.1f%%"),
             "Use Quantity (g)": st.column_config.NumberColumn("Batch Qty (g)", format="%.1f g"),
             "Per 1 Used (g)": st.column_config.NumberColumn("Usage/Pc (g)", format="%.2f g"),
@@ -606,8 +610,8 @@ if menu == "🎨 Technical Recipe Builder & Report Generator":
         sig_prod = st.selectbox("Production Manager Approval", ["Pending", "Approved", "Rejected"], index=1)
 
     recipe_summary = {
-        'recipe_id': recipe_id, 'date': str(rec_date), 'style_name': style_name,
-        'print_tech': print_tech, 'created_by': created_by, 'revision': revision,
+        'recipe_id': recipe_id, 'date': str(rec_date),
+        'style_name': style_name, 'print_tech': print_tech, 'created_by': created_by, 'revision': revision,
         'fabric_comp': fabric_comp, 'fabric_color': fabric_color, 'fabric_const': fabric_const,
         'gsm': gsm, 'dye_risk': dye_migration, 'undercoat': undercoat,
         'batch_size': batch_size, 'target_pcs': target_pcs, 'order_qty': order_qty,
@@ -687,9 +691,11 @@ elif menu == "📚 Chemical & Ink Library Manager":
             if st.form_submit_button("Add to Library"):
                 if new_pname and new_code:
                     new_item = pd.DataFrame([{"Product Name": new_pname, "Supplier Code": new_code, "Role": new_role, "Unit Price ($/kg)": new_price, "Notes": new_notes}])
+                    # Update session state
                     st.session_state.ink_library = pd.concat([st.session_state.ink_library, new_item], ignore_index=True)
+                    # Persist to Excel file & refresh app state
                     if save_ink_library_to_excel(st.session_state.ink_library):
-                        st.success(f"Added '{new_pname}' to chemical library!")
+                        st.success(f"Added '{new_pname}' to chemical library and saved to Excel!")
                         st.rerun()
                 else:
                     st.warning("Please provide Product Name and Code.")
